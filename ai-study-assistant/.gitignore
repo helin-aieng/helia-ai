@@ -1,0 +1,35 @@
+# ====================================================================
+# HELIA AI - PROJECT GITIGNORE
+# ====================================================================
+
+# 1. Database & Local Storage
+helia.db
+*.db
+*.sqlite3
+
+# 2. Streamlit Local Secrets
+.streamlit/secrets.toml
+.streamlit/config.toml
+
+# 3. Python Virtual Environments
+.venv/
+venv/
+env/
+ENV/
+bin/
+lib/
+include/
+
+# 4. Python Cache & Temporary Files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.pypy/
+
+# 5. OS & IDE Specific Files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
