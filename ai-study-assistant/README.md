@@ -35,16 +35,16 @@ To optimize response accuracy, reasoning, and generation speed, Helia AI dynamic
 ## 📸 Screenshots
 
 ### 🔒 Secure Gateway & Authentication
-*(assets/login page1.png)*
-*(assets/login page2.png)*
+![Login Page 1](assets/login%20page1.png)
+![Login Page 2](assets/login%20page2.png)
 
 ### 💬 Document-Grounded Chat
-*(assets/workspace chat.png)*
+![Chat](assets/workspace%20chat.png)
 
 ### 📚 Executive Summaries & Quizzes & Planner
-*(assets/summary.png)*
-*(assets/quiz generator.png)*
-*(assets/study planner.png)*
+![Summary](assets/summary.png)
+![Quiz](assets/quiz%20generator.png)
+![Planner](assets/study%20planner.png)
 
 ---
 
