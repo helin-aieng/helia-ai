@@ -30,13 +30,4 @@ To optimize response accuracy, reasoning, and generation speed, Helia AI dynamic
 - **Quiz Maker:** `llama-3.3-70b-versatile` (High-capacity model optimized for complex, multi-variable logic handling)
 - **Study Planner:** `llama-3.3-70b-versatile` (Advanced structural mapping and temporal calendar planning)
 
----
 
-## 📦 Installation & Local Deployment
-
-If you want to run this project locally, follow these steps:
-
-1. **Clone the repository:**
-   ```bash
-   git clone [https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git](https://github.com/YOUR_USERNAME/YOUR_REPO_NAME.git)
-   cd YOUR_REPO_NAME
