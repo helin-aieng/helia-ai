@@ -26,7 +26,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ================= INITIALIZE GROQ CLIENT =================
-# Güvenlik amacıyla API Key'i Streamlit Secrets yapısından çekiyoruz
+
 try:
     groq_api_key = st.secrets["GROQ_API_KEY"]
     client = Groq(api_key=groq_api_key)
@@ -35,12 +35,13 @@ except Exception as e:
     st.stop()
 
 # ================= MODEL ROUTER =================
-# Groq'un en kararlı, hızlı ve güncel açık kaynaklı modellerini eşleştirdik
+
 MODEL_ROUTER = {
-    "Chat": "llama3-8b-8192",
-    "Summary": "llama3-70b-8192",
-    "Quiz Maker": "mixtral-8x7b-32768",
-    "Study Planner": "llama3-70b-8192"
+    "Chat": "llama-3.1-8b-instant",
+    "Summary": "llama-3.3-70b-versatile",
+    "Quiz Maker": "llama-3.3-70b-versatile",
+    "Study Planner": "llama-3.3-70b-versatile"
+}
 }
 
 # ================= DB (DATABASE LAYER) =================
@@ -206,7 +207,7 @@ else:
 
     current_model = MODEL_ROUTER[menu]
 
-    # ================= 1. CHAT MODÜLÜ =================
+    # ================= 1. CHAT MODULE =================
     if menu == "Chat":
         st.title("🧠 Workspace Chat")
         st.caption("Ask questions, explore concepts, or analyze your uploaded document.")
@@ -252,7 +253,7 @@ else:
                 except Exception as e:
                     st.error(f"Groq streaming error: {e}")
 
-    # ================= 2. SUMMARY MODÜLÜ =================
+    # ================= 2. SUMMARY MODULE =================
     elif menu == "Summary":
         st.title("📚 Executive Summary Assistant")
         st.caption("Extract key definitions, concepts, and bullet points instantly.")
@@ -285,7 +286,7 @@ else:
                 except Exception as e:
                     st.error(f"Error: {e}")
 
-    # ================= 3. QUIZ MAKER MODÜLÜ =================
+    # ================= 3. QUIZ MAKER MODULE =================
     elif menu == "Quiz Maker":
         st.title("📝 Smart Quiz Generator")
         st.caption("Test your knowledge with custom multi-choice questions generated from your file.")
@@ -318,7 +319,7 @@ else:
                 except Exception as e:
                     st.error(f"Error: {e}")
 
-    # ================= 4. STUDY PLANNER MODÜLÜ =================
+    # ================= 4. STUDY PLANNER MODULE =================
     elif menu == "Study Planner":
         st.title("📅 AI Curriculum & Study Planner")
         st.caption("Break down dense material into clear, day-by-day learning schedules.")
