@@ -2,7 +2,7 @@
 
 Helia AI is a high-performance, cloud-integrated study workspace designed to transform dense academic materials into structured knowledge. Powered by **Groq's Ultra-Fast LPU Infrastructure** and Open-Source LLMs, it provides seamless document analysis, real-time streaming chat, and intelligent exam preparation tools.
 
-Live Demo: []
+Live Demo: [https://helia-ai-ye5zgogz2ld3uy24yywn8e.streamlit.app/]
 
 ---
 
