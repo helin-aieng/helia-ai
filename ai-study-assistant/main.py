@@ -42,7 +42,7 @@ MODEL_ROUTER = {
     "Quiz Maker": "llama-3.3-70b-versatile",
     "Study Planner": "llama-3.3-70b-versatile"
 }
-}
+
 
 # ================= DB (DATABASE LAYER) =================
 conn = sqlite3.connect("helia.db", check_same_thread=False)
