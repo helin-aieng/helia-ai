@@ -1,10 +1,10 @@
 import streamlit as st
 import sqlite3
-import ollama
 import io
 import hashlib
 import time
 from PyPDF2 import PdfReader
+from groq import Groq
 
 # ================= CONFIG (DARK MODE UI DECORATION) =================
 st.set_page_config(
@@ -13,47 +13,34 @@ st.set_page_config(
     layout="wide"
 )
 
-# Dark Mode CSS Customization
 st.markdown("""
     <style>
-    /* Ana arka plan ve yazı renkleri */
-    .stApp { 
-        background-color: #0e1117; 
-        color: #ffffff;
-    }
-    /* Sol menü (Sidebar) renkleri */
-    section[data-testid="stSidebar"] {
-        background-color: #161b22 !important;
-    }
-    div[data-testid="stSidebarUserContent"] { 
-        padding-top: 1.5rem; 
-    }
-    /* Butonların karanlık moda uyumu */
-    .stButton>button { 
-        width: 100%; 
-        border-radius: 8px; 
-    }
-    /* Girdi alanlarının metin renklerini sabitleme */
-    .stTextInput input, .stTextArea textarea {
-        color: #ffffff !important;
-    }
-    /* Başlıklar ve alt yazılar */
-    h1, h2, h3, p, span, label {
-        color: #ffffff !important;
-    }
-    /* Kılavuz/Açıklama metinlerinin rengi */
-    .stCaption p {
-        color: #8b949e !important;
-    }
+    .stApp { background-color: #0e1117; color: #ffffff; }
+    section[data-testid="stSidebar"] { background-color: #161b22 !important; }
+    div[data-testid="stSidebarUserContent"] { padding-top: 1.5rem; }
+    .stButton>button { width: 100%; border-radius: 8px; }
+    .stTextInput input, .stTextArea textarea { color: #ffffff !important; }
+    h1, h2, h3, p, span, label { color: #ffffff !important; }
+    .stCaption p { color: #8b949e !important; }
     </style>
 """, unsafe_allow_html=True)
 
+# ================= INITIALIZE GROQ CLIENT =================
+# Güvenlik amacıyla API Key'i Streamlit Secrets yapısından çekiyoruz
+try:
+    groq_api_key = st.secrets["GROQ_API_KEY"]
+    client = Groq(api_key=groq_api_key)
+except Exception as e:
+    st.error("Groq API Key not found! Please configure it in Streamlit Secrets.")
+    st.stop()
+
 # ================= MODEL ROUTER =================
+# Groq'un en kararlı, hızlı ve güncel açık kaynaklı modellerini eşleştirdik
 MODEL_ROUTER = {
-    "Chat": "llama3",
-    "Summary": "phi3",
-    "Quiz Maker": "mistral",
-    "Study Planner": "phi3"
+    "Chat": "llama3-8b-8192",
+    "Summary": "llama3-70b-8192",
+    "Quiz Maker": "mixtral-8x7b-32768",
+    "Study Planner": "llama3-70b-8192"
 }
 
 # ================= DB (DATABASE LAYER) =================
@@ -102,19 +89,6 @@ def get_messages(user):
 def clear_chat(user):
     cur.execute("DELETE FROM messages WHERE user=?", (user,))
     conn.commit()
-
-
-# ================= SAFE MODEL CHECK =================
-def safe_model(name):
-    try:
-        models = ollama.list().get("models", [])
-        for m in models:
-            model_name = m.get("name", "")
-            if name in model_name:
-                return model_name
-        return models[0]["name"] if models else name
-    except:
-        return name
 
 
 # ================= SESSION STATE =================
@@ -216,7 +190,6 @@ else:
     # --- THE BOTTOM SECTION OF SIDEBAR ---
     st.sidebar.markdown("<br><br><hr>", unsafe_allow_html=True)
 
-    # 1. Clear Chat Button
     if st.sidebar.button("🔄 New Chat / Clear History", type="secondary"):
         clear_chat(st.session_state.user)
         st.session_state.active_feature = None
@@ -224,7 +197,6 @@ else:
         time.sleep(0.4)
         st.rerun()
 
-    # 2. Active User Card
     st.sidebar.markdown(f"""
         <div style='background-color: #1f2937; padding: 10px; border-radius: 8px; border-left: 4px solid #3b82f6; margin-top: 10px;'>
             <p style='margin: 0; font-size: 12px; color: #60a5fa; font-weight: bold;'>ACTIVE SESSION</p>
@@ -232,9 +204,9 @@ else:
         </div>
     """, unsafe_allow_html=True)
 
-    current_model = safe_model(MODEL_ROUTER[menu])
+    current_model = MODEL_ROUTER[menu]
 
-    # ================= 1. CHAT MODULE =================
+    # ================= 1. CHAT MODÜLÜ =================
     if menu == "Chat":
         st.title("🧠 Workspace Chat")
         st.caption("Ask questions, explore concepts, or analyze your uploaded document.")
@@ -261,21 +233,15 @@ else:
                 placeholder.markdown("*Thinking...*")
 
                 try:
-                    stream = ollama.chat(
+                    stream = client.chat.completions.create(
                         model=current_model,
                         messages=full_messages,
                         stream=True,
-                        options={"temperature": temperature}
+                        temperature=temperature
                     )
 
                     for chunk in stream:
-                        if hasattr(chunk, 'message'):
-                            content = chunk.message.content
-                        elif isinstance(chunk, dict):
-                            content = chunk.get("message", {}).get("content", "")
-                        else:
-                            content = ""
-
+                        content = chunk.choices[0].delta.content
                         if content:
                             output += content
                             placeholder.markdown(output + " ▌")
@@ -284,9 +250,9 @@ else:
                     save_message(st.session_state.user, "assistant", output)
 
                 except Exception as e:
-                    st.error(f"Model streaming error: {e}")
+                    st.error(f"Groq streaming error: {e}")
 
-    # ================= 2. SUMMARY MODULE =================
+    # ================= 2. SUMMARY MODÜLÜ =================
     elif menu == "Summary":
         st.title("📚 Executive Summary Assistant")
         st.caption("Extract key definitions, concepts, and bullet points instantly.")
@@ -302,7 +268,7 @@ else:
                 output = ""
                 placeholder.markdown("*Analyzing document and writing summary...*")
                 try:
-                    stream = ollama.chat(
+                    stream = client.chat.completions.create(
                         model=current_model,
                         messages=[{
                             "role": "user",
@@ -311,8 +277,7 @@ else:
                         stream=True
                     )
                     for chunk in stream:
-                        content = chunk.message.content if hasattr(chunk, 'message') else chunk.get("message", {}).get(
-                            "content", "")
+                        content = chunk.choices[0].delta.content
                         if content:
                             output += content
                             placeholder.markdown(output + " ▌")
@@ -320,7 +285,7 @@ else:
                 except Exception as e:
                     st.error(f"Error: {e}")
 
-    # ================= 3. QUIZ MAKER MODULE =================
+    # ================= 3. QUIZ MAKER MODÜLÜ =================
     elif menu == "Quiz Maker":
         st.title("📝 Smart Quiz Generator")
         st.caption("Test your knowledge with custom multi-choice questions generated from your file.")
@@ -336,7 +301,7 @@ else:
                 output = ""
                 placeholder.markdown("*Compiling questions...*")
                 try:
-                    stream = ollama.chat(
+                    stream = client.chat.completions.create(
                         model=current_model,
                         messages=[{
                             "role": "user",
@@ -345,8 +310,7 @@ else:
                         stream=True
                     )
                     for chunk in stream:
-                        content = chunk.message.content if hasattr(chunk, 'message') else chunk.get("message", {}).get(
-                            "content", "")
+                        content = chunk.choices[0].delta.content
                         if content:
                             output += content
                             placeholder.markdown(output + " ▌")
@@ -354,7 +318,7 @@ else:
                 except Exception as e:
                     st.error(f"Error: {e}")
 
-    # ================= 4. STUDY PLANNER MODULE =================
+    # ================= 4. STUDY PLANNER MODÜLÜ =================
     elif menu == "Study Planner":
         st.title("📅 AI Curriculum & Study Planner")
         st.caption("Break down dense material into clear, day-by-day learning schedules.")
@@ -378,7 +342,7 @@ else:
                 output = ""
                 placeholder.markdown("*Mapping targets and building calendar...*")
                 try:
-                    stream = ollama.chat(
+                    stream = client.chat.completions.create(
                         model=current_model,
                         messages=[{
                             "role": "user",
@@ -388,13 +352,7 @@ else:
                     )
 
                     for chunk in stream:
-                        if hasattr(chunk, 'message'):
-                            content = chunk.message.content
-                        elif isinstance(chunk, dict):
-                            content = chunk.get("message", {}).get("content", "")
-                        else:
-                            content = ""
-
+                        content = chunk.choices[0].delta.content
                         if content:
                             output += content
                             placeholder.markdown(output + " ... ▌")
