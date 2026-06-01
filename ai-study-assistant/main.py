@@ -229,7 +229,7 @@ else:
         st.rerun()
         
     # LOG OUT BUTTON (CLEAR SESSION & COOKIES)
-    if st.sidebar.button("🚪 Log Out / Çıkış Yap", type="primary"):
+    if st.sidebar.button("🚪 Log Out ", type="primary"):
         cookie_manager.delete("remember_user", key="delete_remember")
         st.session_state.user = None
         st.session_state.pdf_text = ""
