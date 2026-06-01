@@ -5,7 +5,7 @@ import hashlib
 import time
 from PyPDF2 import PdfReader
 from groq import Groq
-import extra-streamlit-components as stx
+import extra_streamlit_components as stx
 
 # ================= CONFIG (DARK MODE UI DECORATION) =================
 st.set_page_config(
