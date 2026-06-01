@@ -92,6 +92,20 @@ def clear_chat(user):
     conn.commit()
 
 
+# ================= GLOBAL IDENTITY PROMPT =================
+IDENTITY_PROMPT = (
+    "CRITICAL IDENTITY RULES:\n"
+    "1. Your name is Helia AI. You are an advanced study assistant.\n"
+    "2. You were completely created and developed by Helin Gündoğan.\n"
+    "3. You have absolutely NO connection, affiliation, or relationship with any other company, "
+    "platform, or website named 'Helia AI' or similar on the internet.\n"
+    "4. If the user asks questions like 'Who created you?', 'Who is your creator?', 'Who developed you?', "
+    "'Seni kim yarattı?', 'Yaratıcın kim?', '¿Quién te creó?' or ANY identity-related questions in ANY language, "
+    "you MUST explicitly and clearly state that you were developed by Helin Gündoğan. Do not credit any other entity.\n"
+    "5. Always respond in the language used by the user, but never alter or translate the name 'Helin Gündoğan'.\n"
+)
+
+
 # ================= SESSION STATE =================
 if "user" not in st.session_state:
     st.session_state.user = None
@@ -134,7 +148,7 @@ if st.session_state.user is None:
             if st.button("Register"):
                 try:
                     cur.execute(
-                        "INSERT INTO users VALUES (?, ?)",
+                        "INSERT VALUES (?, ?)",
                         (u2, hash_pw(p2))
                     )
                     conn.commit()
@@ -225,7 +239,9 @@ else:
             save_message(st.session_state.user, "user", prompt)
 
             pdf_context = st.session_state.pdf_text if use_pdf else ""
-            system_prompt = f"You are Helia AI, an advanced study assistant. Use markdown formatting.\n\nPDF CONTEXT:\n{pdf_context}"
+            
+            # ID Prompt Addition to the System 
+            system_prompt = f"{IDENTITY_PROMPT}\nYou are Helia AI, an advanced study assistant. Use markdown formatting.\n\nPDF CONTEXT:\n{pdf_context}"
             full_messages = [{"role": "system", "content": system_prompt}] + get_messages(st.session_state.user)
 
             with st.chat_message("assistant"):
@@ -271,10 +287,10 @@ else:
                 try:
                     stream = client.chat.completions.create(
                         model=current_model,
-                        messages=[{
-                            "role": "user",
-                            "content": f"Provide a comprehensive summary of this text in markdown formats and bullet points:\n{st.session_state.pdf_text}"
-                        }],
+                        messages=[
+                            {"role": "system", "content": IDENTITY_PROMPT},
+                            {"role": "user", "content": f"Provide a comprehensive summary of this text in markdown formats and bullet points:\n{st.session_state.pdf_text}"}
+                        ],
                         stream=True
                     )
                     for chunk in stream:
@@ -304,10 +320,10 @@ else:
                 try:
                     stream = client.chat.completions.create(
                         model=current_model,
-                        messages=[{
-                            "role": "user",
-                            "content": f"Create 5 challenging multiple-choice questions with answers based on this text:\n{st.session_state.pdf_text}"
-                        }],
+                        messages=[
+                            {"role": "system", "content": IDENTITY_PROMPT},
+                            {"role": "user", "content": f"Create 5 challenging multiple-choice questions with answers based on this text:\n{st.session_state.pdf_text}"}
+                        ],
                         stream=True
                     )
                     for chunk in stream:
@@ -345,10 +361,10 @@ else:
                 try:
                     stream = client.chat.completions.create(
                         model=current_model,
-                        messages=[{
-                            "role": "user",
-                            "content": f"Design a rigorous {days}-day study plan detailing daily targets and sub-topics from this material:\n{st.session_state.pdf_text}"
-                        }],
+                        messages=[
+                            {"role": "system", "content": IDENTITY_PROMPT},
+                            {"role": "user", "content": f"Design a rigorous {days}-day study plan detailing daily targets and sub-topics from this material:\n{st.session_state.pdf_text}"}
+                        ],
                         stream=True
                     )
 
