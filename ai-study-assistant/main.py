@@ -27,11 +27,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ================= COOKIE MANAGER INITIALIZATION =================
-@st.cache_resource
-def get_cookie_manager():
-    return stx.CookieManager()
-
-cookie_manager = get_cookie_manager()
+cookie_manager = stx.CookieManager()
 
 # ================= INITIALIZE GROQ CLIENT =================
 try:
@@ -143,7 +139,7 @@ if st.session_state.user is None:
         with tab1:
             u = st.text_input("Username", key="login_user", placeholder="Enter your username")
             p = st.text_input("Password", type="password", key="login_pass", placeholder="Enter your password")
-            remember_me = st.checkbox("Remember Me / Beni Hatırla", value=True)
+            remember_me = st.checkbox("Remember Me", value=True)
             st.markdown("<br>", unsafe_allow_html=True)
             
             if st.button("Login", type="primary"):
