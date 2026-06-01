@@ -5,6 +5,7 @@ import hashlib
 import time
 from PyPDF2 import PdfReader
 from groq import Groq
+from streamlit_cookies_manager import EncryptedCookiesManager
 
 # ================= CONFIG (DARK MODE UI DECORATION) =================
 st.set_page_config(
@@ -25,8 +26,16 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# ================= INITIALIZE GROQ CLIENT =================
+# ================= COOKIE MANAGER INITIALIZATION =================
+cookies = EncryptedCookiesManager(
+    prefix="helia_ai/",
+    password=st.secrets.get("COOKIE_PASSWORD")
+)
 
+if not cookies.ready():
+    st.stop()
+
+# ================= INITIALIZE GROQ CLIENT =================
 try:
     groq_api_key = st.secrets["GROQ_API_KEY"]
     client = Groq(api_key=groq_api_key)
@@ -35,7 +44,6 @@ except Exception as e:
     st.stop()
 
 # ================= MODEL ROUTER =================
-
 MODEL_ROUTER = {
     "Chat": "llama-3.3-70b-versatile",
     "Summary": "llama-3.3-70b-versatile",
@@ -43,55 +51,58 @@ MODEL_ROUTER = {
     "Study Planner": "llama-3.3-70b-versatile"
 }
 
+# ================= SAFE DATABASE LAYER (THREAD-SAFE) =================
+DB_NAME = "helia.db"
 
-# ================= DB (DATABASE LAYER) =================
-conn = sqlite3.connect("helia.db", check_same_thread=False)
-cur = conn.cursor()
+def init_db():
+    """Initializes the database and tables in a thread-safe manner."""
+    with sqlite3.connect(DB_NAME) as conn:
+        cur = conn.cursor()
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            username TEXT UNIQUE,
+            password TEXT
+        )
+        """)
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS messages (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user TEXT,
+            role TEXT,
+            content TEXT
+        )
+        """)
+        conn.commit()
 
-cur.execute("""
-CREATE TABLE IF NOT EXISTS users (
-    username TEXT UNIQUE,
-    password TEXT
-)
-""")
 
-cur.execute("""
-CREATE TABLE IF NOT EXISTS messages (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    user TEXT,
-    role TEXT,
-    content TEXT
-)
-""")
-conn.commit()
+init_db()
 
-
-# ================= HELPERS =================
 def hash_pw(pw):
     return hashlib.sha256(pw.encode()).hexdigest()
 
-
 def save_message(user, role, content):
-    cur.execute(
-        "INSERT INTO messages (user, role, content) VALUES (?, ?, ?)",
-        (user, role, content)
-    )
-    conn.commit()
-
+    with sqlite3.connect(DB_NAME) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO messages (user, role, content) VALUES (?, ?, ?)",
+            (user, role, content)
+        )
+        conn.commit()
 
 def get_messages(user):
-    cur.execute(
-        "SELECT role, content FROM messages WHERE user=? ORDER BY id ASC",
-        (user,)
-    )
-    return [{"role": r, "content": c} for r, c in cur.fetchall()]
-
+    with sqlite3.connect(DB_NAME) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT role, content FROM messages WHERE user=? ORDER BY id ASC",
+            (user,)
+        )
+        return [{"role": r, "content": c} for r, c in cur.fetchall()]
 
 def clear_chat(user):
-    cur.execute("DELETE FROM messages WHERE user=?", (user,))
-    conn.commit()
-
-
+    with sqlite3.connect(DB_NAME) as conn:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM messages WHERE user=?", (user,))
+        conn.commit()
 
 # ================= GLOBAL IDENTITY PROMPT =================
 IDENTITY_PROMPT = (
@@ -100,20 +111,18 @@ IDENTITY_PROMPT = (
     "2. MANDATORY PRIVACY RULE: Do NOT mention Helin Gündoğan or your development history in regular conversation. "
     "NEVER bring up your creator's name unless the user explicitly asks 'Who created you?', 'Yaratıcın kim?' etc. Keep it completely hidden during standard study assistance.\n"
     "3. Always respond in the language used by the user, but never translate or alter the name 'Helin Gündoğan' when explicitly asked.\n"
-    "4. TONALITY & STYLE (BALANCED COMPANION): Do NOT be overly stiff, robotic, or hyper-formal. Avoid corporate phrases like 'Saygılarımla' or 'Size nasıl yardımcı olabilirim efendim'. "
+    "4. TONALITY & STYLE (BALANCED COMPANION): Do NOT be overly stiff, robotic, or hyper-formal. Avoid corporate phrases like 'Saygılarımla'. "
     "Instead, act like a smart, helpful, polite, and encouraging university study companion. Be clear, professional yet natural, and approachable from the very first message.\n"
     "5. DYNAMIC MIRRORING & HIGH EQ: Actively monitor the user's conversational style. If the user becomes more casual, uses jokes, or feels stressed about exams, instantly match their energy, soften your tone further, and provide empathetic, warm support.\n"
     "6. EMOJI CONSTRAINT: Use emojis very maturely and sparsely (maximum 1 or 2 per response, or none if the context is strictly technical). Never flood the text with emojis.\n"
-    "7. TURKISH PERFORMANCE & SPELLING: When speaking Turkish, ensure it feels organic, fluent, and culturally accurate. "
-    "You must maintain strict spelling, grammar, and typos control. Avoid word deformations (e.g., do NOT write 'dizieler' instead of 'diziler'). "
-    "Check your Turkish outputs for character errors before generating. Speak like a modern, bright student/mentor.\n"
+    "7. TURKISH PERFORMANCE & TOKENS: When speaking Turkish, ensure it feels organic, fluent, and culturally accurate. "
+    "CRITICAL: Do NOT mess up Turkish word tokens and endings. Never combine words incorrectly (e.g., ALWAYS write 'diziler', NEVER write 'dizieler'). "
+    "Double-check your spelling for common Turkish technical terms before hitting output. Speak like a modern, bright student/mentor.\n"
 )
-
-
 
 # ================= SESSION STATE =================
 if "user" not in st.session_state:
-    st.session_state.user = None
+    st.session_state.user = cookies.get("remember_user", None)
 
 if "pdf_text" not in st.session_state:
     st.session_state.pdf_text = ""
@@ -121,7 +130,7 @@ if "pdf_text" not in st.session_state:
 if "active_feature" not in st.session_state:
     st.session_state.active_feature = None
 
-# ================= AUTHENTICATION =================
+# ================= AUTHENTICATION LAYER =================
 if st.session_state.user is None:
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
@@ -134,17 +143,24 @@ if st.session_state.user is None:
         with tab1:
             u = st.text_input("Username", key="login_user", placeholder="Enter your username")
             p = st.text_input("Password", type="password", key="login_pass", placeholder="Enter your password")
+            remember_me = st.checkbox("Remember Me / Beni Hatırla", value=True)
             st.markdown("<br>", unsafe_allow_html=True)
+            
             if st.button("Login", type="primary"):
-                cur.execute(
-                    "SELECT * FROM users WHERE username=? AND password=?",
-                    (u, hash_pw(p))
-                )
-                if cur.fetchone():
-                    st.session_state.user = u
-                    st.rerun()
-                else:
-                    st.error("Invalid username or password.")
+                with sqlite3.connect(DB_NAME) as conn:
+                    cur = conn.cursor()
+                    cur.execute(
+                        "SELECT * FROM users WHERE username=? AND password=?",
+                        (u, hash_pw(p))
+                    )
+                    if cur.fetchone():
+                        st.session_state.user = u
+                        if remember_me:
+                            cookies["remember_user"] = u
+                            cookies.save()
+                        st.rerun()
+                    else:
+                        st.error("Invalid username or password.")
 
         with tab2:
             u2 = st.text_input("New Username", key="reg_user", placeholder="Choose a unique username")
@@ -152,20 +168,19 @@ if st.session_state.user is None:
             st.markdown("<br>", unsafe_allow_html=True)
             if st.button("Register"):
                 try:
-                    cur.execute(
-                        "INSERT INTO users VALUES (?, ?)",
-                        (u2, hash_pw(p2))
-                    )
-                    conn.commit()
+                    with sqlite3.connect(DB_NAME) as conn:
+                        cur = conn.cursor()
+                        cur.execute(
+                            "INSERT INTO users VALUES (?, ?)",
+                            (u2, hash_pw(p2))
+                        )
+                        conn.commit()
                     st.success("Account created successfully! You can now log in.")
                 except:
                     st.error("This username is already taken.")
 
 # ================= MAIN APPLICATION LAYER =================
 else:
-    if not st.session_state.user:
-        st.stop()
-
     # --- SIDEBAR DESIGN ---
     st.sidebar.markdown("## 🧠 Helia Workspace")
     st.sidebar.markdown("---")
@@ -204,17 +219,27 @@ else:
 
     # Advanced Settings
     with st.sidebar.expander("⚙️ Advanced Settings"):
-        temperature = st.slider("Creativity (Temperature)", 0.0, 1.5, 0.7)
+        temperature = st.slider("Creativity (Temperature)", 0.0, 1.5, 0.3) # Default mode is 0.3
         use_pdf = st.toggle("Feed PDF context to Chat", value=True)
 
-    # --- THE BOTTOM SECTION OF SIDEBAR ---
-    st.sidebar.markdown("<br><br><hr>", unsafe_allow_html=True)
+    # --- BUTTONS AT THE BOTTOM OF SIDEBAR ---
+    st.sidebar.markdown("<br><hr>", unsafe_allow_html=True)
 
-    if st.sidebar.button("🔄 New Chat / Clear History", type="secondary"):
+    if st.sidebar.button("🔄 Clear Chat History", type="secondary"):
         clear_chat(st.session_state.user)
         st.session_state.active_feature = None
-        st.sidebar.info("Workspace cleared.")
+        st.sidebar.info("Chat history cleared.")
         time.sleep(0.4)
+        st.rerun()
+        
+    # LOGOUT BUTTON
+    if st.sidebar.button("🚪 Log Out ", type="primary"):
+        if "remember_user" in cookies:
+            del cookies["remember_user"]
+            cookies.save()
+        st.session_state.user = None
+        st.session_state.pdf_text = ""
+        st.session_state.active_feature = None
         st.rerun()
 
     st.sidebar.markdown(f"""
@@ -267,7 +292,7 @@ else:
                             for char in content:
                                 output += char
                                 placeholder.markdown(output + " ▌")
-                                time.sleep(0.005)  
+                                time.sleep(0.002)  
 
                     placeholder.markdown(output)
                     save_message(st.session_state.user, "assistant", output)
