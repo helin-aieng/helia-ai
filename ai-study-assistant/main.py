@@ -5,7 +5,7 @@ import hashlib
 import time
 from PyPDF2 import PdfReader
 from groq import Groq
-from streamlit_cookies_manager import EncryptedCookiesManager
+import extra-streamlit-components as stx
 
 # ================= CONFIG (DARK MODE UI DECORATION) =================
 st.set_page_config(
@@ -27,13 +27,11 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ================= COOKIE MANAGER INITIALIZATION =================
-cookies = EncryptedCookiesManager(
-    prefix="helia_ai/",
-    password=st.secrets.get("COOKIE_PASSWORD")
-)
+@st.cache_resource
+def get_cookie_manager():
+    return stx.CookieManager()
 
-if not cookies.ready():
-    st.stop()
+cookie_manager = get_cookie_manager()
 
 # ================= INITIALIZE GROQ CLIENT =================
 try:
@@ -51,7 +49,7 @@ MODEL_ROUTER = {
     "Study Planner": "llama-3.3-70b-versatile"
 }
 
-# ================= SAFE DATABASE LAYER (THREAD-SAFE) =================
+# ================= THREAD-SAFE DATABASE LAYER =================
 DB_NAME = "helia.db"
 
 def init_db():
@@ -74,7 +72,7 @@ def init_db():
         """)
         conn.commit()
 
-
+# Run DB initialization
 init_db()
 
 def hash_pw(pw):
@@ -120,9 +118,11 @@ IDENTITY_PROMPT = (
     "Double-check your spelling for common Turkish technical terms before hitting output. Speak like a modern, bright student/mentor.\n"
 )
 
-# ================= SESSION STATE =================
+# ================= SESSION STATE & COOKIE CHECK =================
 if "user" not in st.session_state:
-    st.session_state.user = cookies.get("remember_user", None)
+   
+    saved_user = cookie_manager.get(cookie="remember_user")
+    st.session_state.user = saved_user if saved_user else None
 
 if "pdf_text" not in st.session_state:
     st.session_state.pdf_text = ""
@@ -156,8 +156,8 @@ if st.session_state.user is None:
                     if cur.fetchone():
                         st.session_state.user = u
                         if remember_me:
-                            cookies["remember_user"] = u
-                            cookies.save()
+                            
+                            cookie_manager.set("remember_user", u, key="set_remember")
                         st.rerun()
                     else:
                         st.error("Invalid username or password.")
@@ -219,7 +219,7 @@ else:
 
     # Advanced Settings
     with st.sidebar.expander("⚙️ Advanced Settings"):
-        temperature = st.slider("Creativity (Temperature)", 0.0, 1.5, 0.3) # Default mode is 0.3
+        temperature = st.slider("Creativity (Temperature)", 0.0, 1.5, 0.3)
         use_pdf = st.toggle("Feed PDF context to Chat", value=True)
 
     # --- BUTTONS AT THE BOTTOM OF SIDEBAR ---
@@ -232,11 +232,9 @@ else:
         time.sleep(0.4)
         st.rerun()
         
-    # LOGOUT BUTTON
-    if st.sidebar.button("🚪 Log Out ", type="primary"):
-        if "remember_user" in cookies:
-            del cookies["remember_user"]
-            cookies.save()
+    # LOG OUT BUTTON (CLEAR SESSION & COOKIES)
+    if st.sidebar.button("🚪 Log Out / Çıkış Yap", type="primary"):
+        cookie_manager.delete("remember_user", key="delete_remember")
         st.session_state.user = None
         st.session_state.pdf_text = ""
         st.session_state.active_feature = None
