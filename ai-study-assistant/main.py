@@ -148,7 +148,7 @@ if st.session_state.user is None:
             if st.button("Register"):
                 try:
                     cur.execute(
-                        "INSERT VALUES (?, ?)",
+                        "INSERT INTO users VALUES (?, ?)",
                         (u2, hash_pw(p2))
                     )
                     conn.commit()
@@ -239,8 +239,6 @@ else:
             save_message(st.session_state.user, "user", prompt)
 
             pdf_context = st.session_state.pdf_text if use_pdf else ""
-            
-            # ID Prompt Addition to the System 
             system_prompt = f"{IDENTITY_PROMPT}\nYou are Helia AI, an advanced study assistant. Use markdown formatting.\n\nPDF CONTEXT:\n{pdf_context}"
             full_messages = [{"role": "system", "content": system_prompt}] + get_messages(st.session_state.user)
 
@@ -257,11 +255,14 @@ else:
                         temperature=temperature
                     )
 
+                    # Typing Effect
                     for chunk in stream:
                         content = chunk.choices[0].delta.content
                         if content:
-                            output += content
-                            placeholder.markdown(output + " ▌")
+                            for char in content:
+                                output += char
+                                placeholder.markdown(output + " ▌")
+                                time.sleep(0.005)  
 
                     placeholder.markdown(output)
                     save_message(st.session_state.user, "assistant", output)
