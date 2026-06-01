@@ -5,7 +5,6 @@ import hashlib
 import time
 from PyPDF2 import PdfReader
 from groq import Groq
-import extra_streamlit_components as stx
 
 # ================= CONFIG (DARK MODE UI DECORATION) =================
 st.set_page_config(
@@ -26,9 +25,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# ================= COOKIE MANAGER INITIALIZATION =================
-cookie_manager = stx.CookieManager()
-
 # ================= INITIALIZE GROQ CLIENT =================
 try:
     groq_api_key = st.secrets["GROQ_API_KEY"]
@@ -37,12 +33,12 @@ except Exception as e:
     st.error("Groq API Key not found! Please configure it in Streamlit Secrets.")
     st.stop()
 
-# ================= MODEL ROUTER =================
+# ================= OPTIMIZED MODEL ROUTER =================
 MODEL_ROUTER = {
-    "Chat": "llama-3.3-70b-versatile",
-    "Summary": "llama-3.3-70b-versatile",
-    "Quiz Maker": "llama-3.3-70b-versatile",
-    "Study Planner": "llama-3.3-70b-versatile"
+    "Chat": "llama-3.3-70b-versatile",       
+    "Summary": "llama-3.1-8b-instant",       
+    "Quiz Maker": "llama-3.1-8b-instant",    
+    "Study Planner": "llama-3.1-8b-instant"  
 }
 
 # ================= THREAD-SAFE DATABASE LAYER =================
@@ -98,6 +94,25 @@ def clear_chat(user):
         cur.execute("DELETE FROM messages WHERE user=?", (user,))
         conn.commit()
 
+# ================= ERROR HANDLING HELPER =================
+def handle_groq_error(error_obj, UI_placeholder):
+    """Parses Groq API errors and renders a clean, user-friendly English alert box."""
+    error_msg = str(error_obj)
+    UI_placeholder.empty()  # Clear the loading/thinking message
+    
+    if "429" in error_msg or "rate_limit" in error_msg:
+        wait_time = "a few"
+        if "in " in error_msg:
+            try:
+                raw_time = error_msg.split("in ")[1].split(".")[0]
+                wait_time = raw_time.replace("m", " minute(s) ").replace("s", " second(s)")
+            except:
+                pass
+        
+        st.error(f"⏳ **Daily Token Limit Reached!**\n\nHelia AI has reached its API threshold due to high traffic or dense context. The system window will reset in approximately **{wait_time}**. Please take a short break and try again.")
+    else:
+        st.error(f"⚠️ **API Execution Error:** {error_msg}")
+
 # ================= GLOBAL IDENTITY PROMPT =================
 IDENTITY_PROMPT = (
     "CRITICAL IDENTITY, LANGUAGE & EMOTIONAL INTELLIGENCE RULES:\n"
@@ -116,11 +131,11 @@ IDENTITY_PROMPT = (
     "Never deform words (e.g., ALWAYS write 'diziler', NEVER write 'dizieler').\n"
 )
 
-# ================= SESSION STATE & COOKIE CHECK =================
+# ================= SESSION STATE & URL PARAMETERS =================
+url_user = st.query_params.get("user_session", None)
+
 if "user" not in st.session_state:
-   
-    saved_user = cookie_manager.get(cookie="remember_user")
-    st.session_state.user = saved_user if saved_user else None
+    st.session_state.user = url_user
 
 if "pdf_text" not in st.session_state:
     st.session_state.pdf_text = ""
@@ -154,8 +169,7 @@ if st.session_state.user is None:
                     if cur.fetchone():
                         st.session_state.user = u
                         if remember_me:
-                            
-                            cookie_manager.set("remember_user", u, key="set_remember")
+                            st.query_params["user_session"] = u
                         st.rerun()
                     else:
                         st.error("Invalid username or password.")
@@ -179,6 +193,9 @@ if st.session_state.user is None:
 
 # ================= MAIN APPLICATION LAYER =================
 else:
+    if "user_session" not in st.query_params:
+        st.query_params["user_session"] = st.session_state.user
+
     # --- SIDEBAR DESIGN ---
     st.sidebar.markdown("## 🧠 Helia Workspace")
     st.sidebar.markdown("---")
@@ -230,9 +247,9 @@ else:
         time.sleep(0.4)
         st.rerun()
         
-    # LOG OUT BUTTON (CLEAR SESSION & COOKIES)
+    # NATIVE LOG OUT (CLEAR SESSION & URL PARAMS)
     if st.sidebar.button("🚪 Log Out ", type="primary"):
-        cookie_manager.delete("remember_user", key="delete_remember")
+        st.query_params.clear()
         st.session_state.user = None
         st.session_state.pdf_text = ""
         st.session_state.active_feature = None
@@ -294,7 +311,7 @@ else:
                     save_message(st.session_state.user, "assistant", output)
 
                 except Exception as e:
-                    st.error(f"Groq streaming error: {e}")
+                    handle_groq_error(e, placeholder)
 
     # ================= 2. SUMMARY MODULE =================
     elif menu == "Summary":
@@ -327,7 +344,7 @@ else:
                             placeholder.markdown(output + " ▌")
                     placeholder.markdown(output)
                 except Exception as e:
-                    st.error(f"Error: {e}")
+                    handle_groq_error(e, placeholder)
 
     # ================= 3. QUIZ MAKER MODULE =================
     elif menu == "Quiz Maker":
@@ -360,7 +377,7 @@ else:
                             placeholder.markdown(output + " ▌")
                     placeholder.markdown(output)
                 except Exception as e:
-                    st.error(f"Error: {e}")
+                    handle_groq_error(e, placeholder)
 
     # ================= 4. STUDY PLANNER MODULE =================
     elif menu == "Study Planner":
@@ -368,12 +385,10 @@ else:
         st.caption("Break down dense material into clear, day-by-day learning schedules.")
 
         if not st.session_state.pdf_text:
-            st.info(
-                "💡 Please upload a study material PDF from the sidebar to align plans with your exact course material.")
+            st.info("💡 Please upload a study material PDF from the sidebar to align plans with your exact course material.")
         else:
             with st.container():
-                days = st.number_input("Days left until your exam:", min_value=1, max_value=365, value=7,
-                                       key="planner_days_input")
+                days = st.number_input("Days left until your exam:", min_value=1, max_value=365, value=7, key="planner_days_input")
                 st.markdown("<br>", unsafe_allow_html=True)
                 btn = st.button("Build My Schedule", type="primary")
 
@@ -404,5 +419,5 @@ else:
                     placeholder.markdown(output)
 
                 except Exception as e:
-                    st.error(f"Error: {e}")
+                    handle_groq_error(e, placeholder)
                     st.session_state.active_feature = None
