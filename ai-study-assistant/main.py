@@ -3,6 +3,7 @@ import sqlite3
 import io
 import hashlib
 import time
+import re  
 from PyPDF2 import PdfReader
 from groq import Groq
 
@@ -38,7 +39,7 @@ MODEL_ROUTER = {
     "Chat": "llama-3.3-70b-versatile",       
     "Summary": "llama-3.1-8b-instant",       
     "Quiz Maker": "llama-3.1-8b-instant",    
-    "Study Planner": "llama-3.1-8b-instant"  
+    "Study Planner": "llama-3.1-8b-instant" 
 }
 
 # ================= THREAD-SAFE DATABASE LAYER =================
@@ -96,15 +97,18 @@ def clear_chat(user):
 
 # ================= ERROR HANDLING HELPER =================
 def handle_groq_error(error_obj, UI_placeholder):
-    """Parses Groq API errors and renders a clean, user-friendly English alert box."""
+    """Parses Groq API errors securely using regex and renders a clean English alert box."""
     error_msg = str(error_obj)
-    UI_placeholder.empty()  # Clear the loading/thinking message
+    UI_placeholder.empty()  
     
     if "429" in error_msg or "rate_limit" in error_msg:
-        wait_time = "a few"
-        if "in " in error_msg:
+        wait_time = "a few minutes"
+        
+        
+        match = re.search(r"try again in (\d+m\d+\.\d+s|\d+m|\d+\.\d+s|\d+s)", error_msg)
+        if match:
             try:
-                raw_time = error_msg.split("in ")[1].split(".")[0]
+                raw_time = match.group(1).split(".")[0]  
                 wait_time = raw_time.replace("m", " minute(s) ").replace("s", " second(s)")
             except:
                 pass
@@ -156,7 +160,7 @@ if st.session_state.user is None:
         with tab1:
             u = st.text_input("Username", key="login_user", placeholder="Enter your username")
             p = st.text_input("Password", type="password", key="login_pass", placeholder="Enter your password")
-            remember_me = st.checkbox("Remember Me", value=True)
+            remember_me = st.checkbox("Remember Me / Beni Hatırla", value=True)
             st.markdown("<br>", unsafe_allow_html=True)
             
             if st.button("Login", type="primary"):
@@ -248,7 +252,7 @@ else:
         st.rerun()
         
     # NATIVE LOG OUT (CLEAR SESSION & URL PARAMS)
-    if st.sidebar.button("🚪 Log Out ", type="primary"):
+    if st.sidebar.button("🚪 Log Out / Çıkış Yap", type="primary"):
         st.query_params.clear()
         st.session_state.user = None
         st.session_state.pdf_text = ""
