@@ -106,7 +106,7 @@ IDENTITY_PROMPT = (
     "6. TURKISH PERFORMANCE: When speaking Turkish, ensure it feels organic and culturally accurate. Avoid literal translations from English. "
     "Be professional when they are professional; be friendly, encouraging, and comforting when they need emotional or casual support.\n"
 )
-)
+
 
 
 # ================= SESSION STATE =================
