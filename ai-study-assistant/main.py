@@ -603,24 +603,41 @@ else:
                         model=current_model,
                         response_format={"type": "json_object"},
                         messages=[
-                            {"role": "system", "content": "You are a strict exam generator. You must output raw JSON only, matching the exact requested structure. Do not include any conversational prose."},
-                            {"role": "user", "content": f"""
-                            Create exactly {num_questions} multiple-choice questions based on the text below.
-                            Provide the output in this strict JSON format:
-                            {{
-                                "questions": [
-                                    {{
-                                        "id": 1,
-                                        "question": "Question text here",
-                                        "options": ["Option A", "Option B", "Option C", "Option D"],
-                                        "answer": "The exact correct option string matching one of the options"
-                                    }}
-                                ]
-                            }}
-                            
-                            TEXT MATERIAL:
-                            {st.session_state.pdf_text}
-                            """}
+                            {
+                                "role": "system", 
+                                "content": (
+                                    "You are an elite mathematics professor and strict exam generator. "
+                                    "Your job is to read the source text, perform any necessary mathematical derivations, "
+                                    "and output a multiple-choice quiz in raw JSON format.\n\n"
+                                    "CRITICAL MATHEMATICAL FORMATTING RULES:\n"
+                                    "1. Convert complex expressions, series (e.g., Taylor series, sums), and limits into standard LaTeX format using single dollar signs (e.g., $f(x) = \\sum_{n=0}^{\\infty} a_n x^n$).\n"
+                                    "2. JSON COMPLIANCE: Because you are formatting in LaTeX, you MUST double-escape all backslashes inside the JSON values. Use '\\\\' instead of '\\' (e.g.,write '$\\sum_{{n=0}}^{{\\infty}}$').\n"
+                                    "3. Do not create corrupted notation. Ensure mathematical symbols are accurate and fully calculated where applicable.\n"
+                                    "4. Output strictly valid JSON. No conversational text."
+                                )
+                            },
+                            {
+                                "role": "user", 
+                                "content": f"""
+                                Generate exactly {num_questions} mathematically rigorous questions based on this text.
+                                Ensure the 'answer' key perfectly matches one of the elements in the 'options' array.
+                                
+                                Provide the output in this strict JSON format:
+                                {{
+                                    "questions": [
+                                        {{
+                                            "id": 1,
+                                            "question": "Question text with LaTeX if needed",
+                                            "options": ["Option A string", "Option B string", "Option C string", "Option D string"],
+                                            "answer": "The exact correct option string"
+                                        }}
+                                    ]
+                                }}
+                                
+                                TEXT MATERIAL:
+                                {st.session_state.pdf_text}
+                                """
+                            }
                         ]
                     )
                     
@@ -628,7 +645,15 @@ else:
                     st.session_state.user_answers = {}
                     placeholder.empty()
                 except Exception as e:
-                    handle_groq_error(e, placeholder)
+                    if "json_validate_failed" in str(e) or "400" in str(e):
+                        placeholder.empty()
+                        st.error(
+                            "⚠️ **Mathematical Formatting Sync Error:**\n\n"
+                            "The model could not safely escape the document's intense mathematical notations into JSON. "
+                            "Please try selecting a cleaner or shorter section of the text to build the quiz."
+                        )
+                    else:
+                        handle_groq_error(e, placeholder)
 
             if st.session_state.quiz_data and "questions" in st.session_state.quiz_data:
                 st.markdown("---")
@@ -639,9 +664,11 @@ else:
                     st.markdown(f"""
                         <div class="premium-card">
                             <span style='color: #60a5fa; font-weight: 800; font-size: 14px;'>EXAM QUESTION {q['id']}</span>
-                            <h3 style='margin-top: 4px; font-weight: 600;'>{q['question']}</h3>
                         </div>
                     """, unsafe_allow_html=True)
+                    
+                    # Streamlit handles LaTeX inside standard st.markdown natively, 
+                    st.markdown(f"### {q['question']}")
                     
                     user_choice = st.radio(
                         "Choose your answer:",
@@ -658,10 +685,12 @@ else:
                     for q in st.session_state.quiz_data["questions"]:
                         ans = st.session_state.user_answers.get(q["id"])
                         if ans == q["answer"]:
-                            st.success(f"✅ **Question {q['id']}: Correct!** (Your answer: {ans})")
+                            st.success(f"✅ **Question {q['id']}: Correct!**")
+                            st.markdown(f"Your answer: {ans}")
                             score += 1
                         else:
-                            st.error(f"❌ **Question {q['id']}: Incorrect.**\n\n*Your answer:* {ans} | *Correct answer:* {q['answer']}")
+                            st.error(f"❌ **Question {q['id']}: Incorrect.**")
+                            st.markdown(f"*Your answer:* {ans}\n\n*Correct answer:* {q['answer']}")
                     
                     st.markdown("<br>", unsafe_allow_html=True)
                     st.metric(label="Final Score Summary", value=f"{score} / {total_q}", delta=f"{int((score/total_q)*100)}% Success Rate")
