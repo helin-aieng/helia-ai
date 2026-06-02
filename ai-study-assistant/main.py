@@ -200,7 +200,7 @@ def create_new_session(username):
         cur = conn.cursor()
         cur.execute(
             "INSERT INTO chat_sessions (session_id, username, title) VALUES (?, ?, ?)",
-            (session_id, username, "New Chat / Yeni Sohbet")
+            (session_id, username, "New Chat")
         )
         conn.commit()
     return session_id
