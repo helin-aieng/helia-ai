@@ -161,17 +161,23 @@ def init_db():
             password TEXT
         )
         """)
-        # Added session_id to separate different conversation tracks
+        # Base table template creation
         cur.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id TEXT,
             user TEXT,
             role TEXT,
             content TEXT
         )
         """)
-        # Metadata table to map session hashes to clean dynamic titles
+        
+        # SAFE MIGRATION: Catch database layout versioning errors dynamically
+        try:
+            cur.execute("SELECT session_id FROM messages LIMIT 1")
+        except sqlite3.OperationalError:
+            # Inject session column if legacy DB architecture structure is discovered
+            cur.execute("ALTER TABLE messages ADD COLUMN session_id TEXT")
+            
         cur.execute("""
         CREATE TABLE IF NOT EXISTS chat_sessions (
             session_id TEXT UNIQUE,
@@ -200,7 +206,6 @@ def create_new_session(username):
     return session_id
 
 def update_session_title(session_id, first_msg):
-    # Truncate first message to create a clean, elegant sidebar string
     clean_title = first_msg[:24] + "..." if len(first_msg) > 24 else first_msg
     with sqlite3.connect(DB_NAME) as conn:
         cur = conn.cursor()
@@ -379,7 +384,6 @@ else:
         user_history = get_user_sessions(st.session_state.user)
         
         for s_id, title in user_history:
-            # Highlight current active session visually
             prefix = "💬 " if s_id != st.session_state.current_session_id else "🚀 "
             st.sidebar.markdown(f'<div class="chat-history-btn">', unsafe_allow_html=True)
             if st.sidebar.button(f"{prefix}{title}", key=f"nav_{s_id}", use_container_width=True):
@@ -450,12 +454,11 @@ else:
 
     current_model = MODEL_ROUTER[menu]
 
-    # ================= 1. CHAT MODULE (MULTI-SESSION UPDATED) =================
+    # ================= 1. CHAT MODULE (MULTI-SESSION) =================
     if menu == "Chat":
         st.markdown("<h1>🧠 Workspace Smart Chat</h1>", unsafe_allow_html=True)
         st.caption("Ask questions, explore academic concepts, or analyze your uploaded document lines.")
 
-        # Pull historical arrays bound specifically to current tracked session_id node
         messages = get_messages(st.session_state.current_session_id)
         for msg in messages:
             with st.chat_message(msg["role"]):
@@ -467,7 +470,6 @@ else:
             with st.chat_message("user"):
                 st.markdown(prompt)
             
-            # Dynamic titling optimization trick if this is the initial token message line entry
             if len(messages) == 0:
                 update_session_title(st.session_state.current_session_id, prompt)
                 
@@ -501,7 +503,6 @@ else:
                     placeholder.markdown(output)
                     save_message(st.session_state.current_session_id, st.session_state.user, "assistant", output)
                     
-                    # Force a lightweight refresh if initial query execution to sync sidebar titles layout immediately
                     if len(messages) == 0:
                         st.rerun()
 
