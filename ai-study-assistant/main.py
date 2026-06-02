@@ -600,7 +600,7 @@ else:
 
             if generate_btn:
                 placeholder = st.empty()
-                placeholder.markdown(f"*Preparing {num_questions} math exam questions from the document...*")
+                placeholder.markdown(f"*Preparing {num_questions} quiz questions from the document...*")
                 try:
                     response = client.chat.completions.create(
                         model=current_model,
