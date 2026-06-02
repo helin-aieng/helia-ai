@@ -200,13 +200,30 @@ def create_new_session(username):
         cur = conn.cursor()
         cur.execute(
             "INSERT INTO chat_sessions (session_id, username, title) VALUES (?, ?, ?)",
-            (session_id, username, "New Chat")
+            (session_id, username, "New Chat / Yeni Sohbet")
         )
         conn.commit()
     return session_id
 
 def update_session_title(session_id, first_msg):
-    clean_title = first_msg[:24] + "..." if len(first_msg) > 24 else first_msg
+    try:
+        # Use a comprehensive topic title from the initial prompt
+        response = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[
+                {"role": "system", "content": "You are a chat session title generator. Analyze the user's first message and generate a clean, professional, and specific title of maximum 3-4 words. Match the language of the user's message. Output ONLY the title itself, without quotes, punctuation, or any introductory prose."},
+                {"role": "user", "content": f"First Message: {first_msg}"}
+            ],
+            max_tokens=15,
+            temperature=0.5
+        )
+        clean_title = response.choices[0].message.content.strip()
+        if not clean_title:
+            clean_title = first_msg[:24] + "..." if len(first_msg) > 24 else first_msg
+    except Exception:
+        # in case of temporary network or API limits failures
+        clean_title = first_msg[:24] + "..." if len(first_msg) > 24 else first_msg
+
     with sqlite3.connect(DB_NAME) as conn:
         cur = conn.cursor()
         cur.execute(
@@ -277,7 +294,7 @@ IDENTITY_PROMPT = (
     "3. Always respond in the language used by the user, but never translate or alter the name 'Helin Gündoğan' when explicitly asked.\n"
     "4. TONALITY & STYLE (BALANCED COMPANION): Do NOT be overly stiff, robotic, or hyper-formal. Avoid corporate phrases like 'Saygılarımla'. "
     "Instead, act like a smart, helpful, polite, and encouraging university study companion. Be clear, professional yet natural, and approachable from the very first message.\n"
-    "5. DYNAMIC MIRRORING & HIGH EQ: Actively monitor the user's conversational style. If the user becomes more casual, uses jokes, or feels stressed about exams, instantly match their energy, soften your tone further, and provide empathetic, warm support.\n"
+    "5. DYNAMIC MIRROWING & HIGH EQ: Actively monitor the user's conversational style. If the user becomes more casual, uses jokes, or feels stressed about exams, instantly match their energy, soften your tone further, and provide empathetic, warm support.\n"
     "6. EMOJI CONSTRAINT: Use emojis very maturely and sparsely (maximum 1 or 2 per response, or none if the context is strictly technical). Never flood the text with emojis.\n"
     "7. TURKISH PERFORMANCE & SYNTAX: When speaking Turkish, you MUST use standard, formal, and non-inverted (kurallı) sentences. "
     "CRITICAL: Keep the verb (yüklem) strictly at the very end of every sentence. Do NOT use inverted sentences. "
@@ -376,7 +393,7 @@ else:
     # --- CHAT HISTORY SECTIONS MANAGER BLOCK (RENDERED ONLY WHEN MENU MATCHES CHAT) ---
     if menu == "Chat":
         st.sidebar.markdown("<br>", unsafe_allow_html=True)
-        if st.sidebar.button("➕ New Chat ", type="primary", use_container_width=True):
+        if st.sidebar.button("➕ New Chat / Yeni Sohbet", type="primary", use_container_width=True):
             st.session_state.current_session_id = create_new_session(st.session_state.user)
             st.rerun()
             
@@ -415,7 +432,7 @@ else:
             st.sidebar.error(f"File Error: {e}")
 
     # Expandable Advanced Settings
-    with st.sidebar.expander("⚙️ Advanced Settings"):
+    with st.sidebar.expander("⚙️ Advanced Tuning"):
         temperature = st.slider("Creativity (Temperature)", 0.0, 1.5, 0.3)
         use_pdf = st.toggle("Include PDF document in Chat", value=True)
 
@@ -423,7 +440,7 @@ else:
     st.sidebar.markdown("<br><hr>", unsafe_allow_html=True)
 
     if menu == "Chat":
-        if st.sidebar.button("🗑️ Delete Current Chat ", type="secondary"):
+        if st.sidebar.button("🗑️ Delete Current Chat Thread", type="secondary"):
             delete_session(st.session_state.current_session_id)
             st.session_state.current_session_id = None
             st.sidebar.info("Conversation thread purged.")
@@ -454,7 +471,7 @@ else:
 
     current_model = MODEL_ROUTER[menu]
 
-    # ================= 1. CHAT MODULE (MULTI-SESSION) =================
+    # ================= 1. CHAT MODULE (MULTI-SESSION UPDATED) =================
     if menu == "Chat":
         st.markdown("<h1>🧠 Workspace Smart Chat</h1>", unsafe_allow_html=True)
         st.caption("Ask questions, explore academic concepts, or analyze your uploaded document lines.")
@@ -580,7 +597,7 @@ else:
 
             if generate_btn:
                 placeholder = st.empty()
-                placeholder.markdown(f"*{num_questions} adet sınav sorusu dökümandan hazırlanıyor...*")
+                placeholder.markdown(f"*Preparing {num_questions} exam questions from the document...*")
                 try:
                     response = client.chat.completions.create(
                         model=current_model,
