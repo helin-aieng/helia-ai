@@ -573,7 +573,7 @@ else:
     # ================= 3. QUIZ MAKER MODULE =================
     elif menu == "Quiz Maker":
         st.markdown("<h1>📝 Interactive Quiz Generator</h1>", unsafe_allow_html=True)
-        st.caption("Test your knowledge with multiple-choice questions and instant score feedback.")
+        st.caption("Test your knowledge with rigorous multiple-choice mathematical questions and instant feedback.")
 
         if not st.session_state.pdf_text:
             st.info("💡 Please upload a study material PDF from the sidebar to activate the Quiz Generator.")
@@ -597,63 +597,69 @@ else:
 
             if generate_btn:
                 placeholder = st.empty()
-                placeholder.markdown(f"*Preparing {num_questions} exam questions from the document...*")
+                placeholder.markdown(f"*Preparing {num_questions} math exam questions from the document...*")
                 try:
-                    response = client.chat.completions.create(
+                   response = client.chat.completions.create(
                         model=current_model,
-                        response_format={"type": "json_object"},
                         messages=[
                             {
                                 "role": "system", 
                                 "content": (
-                                    "You are an elite mathematics professor and strict exam generator. "
-                                    "Your job is to read the source text, perform any necessary mathematical derivations, "
-                                    "and output a multiple-choice quiz in raw JSON format.\n\n"
-                                    "CRITICAL MATHEMATICAL FORMATTING RULES:\n"
-                                    "1. Convert complex expressions, series (e.g., Taylor series, sums), and limits into standard LaTeX format using single dollar signs (e.g., $f(x) = \\sum_{n=0}^{\\infty} a_n x^n$).\n"
-                                    "2. JSON COMPLIANCE: Because you are formatting in LaTeX, you MUST double-escape all backslashes inside the JSON values. Use '\\\\' instead of '\\' (e.g.,write '$\\sum_{{n=0}}^{{\\infty}}$').\n"
-                                    "3. Do not create corrupted notation. Ensure mathematical symbols are accurate and fully calculated where applicable.\n"
-                                    "4. Output strictly valid JSON. No conversational text."
+                                    "You are an elite academic professor. Generate multiple-choice questions from the text.\n"
+                                    "You must perform full mathematical derivations, calculations, and present formulas in standard LaTeX using single dollar signs (e.g., $f(x) = \\sum_{n=0}^{\\infty} a_n x^n$).\n\n"
+                                    "CRITICAL OUTPUT FORMAT:\n"
+                                    "You must output the quiz using the exact plain-text pattern below. Do NOT use markdown bold on identifiers. Output nothing else:\n\n"
+                                    "QUESTION: [Write the question here, use $ for LaTeX]\n"
+                                    "A) [Option A]\n"
+                                    "B) [Option B]\n"
+                                    "C) [Option C]\n"
+                                    "D) [Option D]\n"
+                                    "CORRECT: [Write the exact string matching the correct option]\n"
+                                    "---"
                                 )
                             },
                             {
                                 "role": "user", 
-                                "content": f"""
-                                Generate exactly {num_questions} mathematically rigorous questions based on this text.
-                                Ensure the 'answer' key perfectly matches one of the elements in the 'options' array.
-                                
-                                Provide the output in this strict JSON format:
-                                {{
-                                    "questions": [
-                                        {{
-                                            "id": 1,
-                                            "question": "Question text with LaTeX if needed",
-                                            "options": ["Option A string", "Option B string", "Option C string", "Option D string"],
-                                            "answer": "The exact correct option string"
-                                        }}
-                                    ]
-                                }}
-                                
-                                TEXT MATERIAL:
-                                {st.session_state.pdf_text}
-                                """
+                                "content": f"Generate exactly {num_questions} mathematical questions following the system pattern based on this material:\n\n{st.session_state.pdf_text}"
                             }
-                        ]
+                        ],
+                        temperature=0.3
                     )
                     
-                    st.session_state.quiz_data = json.loads(response.choices[0].message.content)
+                    raw_text = response.choices[0].message.content
+                    
+                    # Regex Engine
+                    blocks = raw_text.split("---")
+                    parsed_questions = []
+                    q_id = 1
+                    
+                    for block in blocks:
+                        if "QUESTION:" in block and "CORRECT:" in block:
+                            q_text = re.search(r"QUESTION:\s*(.*?)\n[A-D]\)", block, re.DOTALL)
+                            opt_a = re.search(r"A\)\s*(.*?)\n", block)
+                            opt_b = re.search(r"B\)\s*(.*?)\n", block)
+                            opt_c = re.search(r"C\)\s*(.*?)\n", block)
+                            opt_d = re.search(r"D\)\s*(.*?)\n", block)
+                            correct = re.search(r"CORRECT:\s*(.*?)(?:\n|$)", block)
+                            
+                            if q_text and opt_a and opt_b and opt_c and opt_d and correct:
+                                parsed_questions.append({
+                                    "id": q_id,
+                                    "question": q_text.group(1).strip(),
+                                    "options": [opt_a.group(1).strip(), opt_b.group(1).strip(), opt_c.group(1).strip(), opt_d.group(1).strip()],
+                                    "answer": correct.group(1).strip()
+                                })
+                                q_id += 1
+                    
+                    st.session_state.quiz_data = {"questions": parsed_questions}
                     st.session_state.user_answers = {}
                     placeholder.empty()
+                    
+                    if not parsed_questions:
+                        st.warning("Could not structure the quiz. Please try generating again.")
+                        
                 except Exception as e:
-                    if "json_validate_failed" in str(e) or "400" in str(e):
-                        placeholder.empty()
-                        st.error(
-                            "⚠️ **Mathematical Formatting Sync Error:**\n\n"
-                            "The model could not safely escape the document's intense mathematical notations into JSON. "
-                            "Please try selecting a cleaner or shorter section of the text to build the quiz."
-                        )
-                    else:
-                        handle_groq_error(e, placeholder)
+                    handle_groq_error(e, placeholder)
 
             if st.session_state.quiz_data and "questions" in st.session_state.quiz_data:
                 st.markdown("---")
@@ -662,13 +668,13 @@ else:
                 
                 for q in st.session_state.quiz_data["questions"]:
                     st.markdown(f"""
-                        <div class="premium-card">
+                        <div class="premium-card" style="margin-bottom: 5px;">
                             <span style='color: #60a5fa; font-weight: 800; font-size: 14px;'>EXAM QUESTION {q['id']}</span>
                         </div>
                     """, unsafe_allow_html=True)
                     
-                    # Streamlit handles LaTeX inside standard st.markdown natively, 
-                    st.markdown(f"### {q['question']}")
+                    # Renders beautiful mathematical equations natively via Streamlit Markdown engine
+                    st.markdown(f"**{q['question']}**")
                     
                     user_choice = st.radio(
                         "Choose your answer:",
@@ -694,7 +700,6 @@ else:
                     
                     st.markdown("<br>", unsafe_allow_html=True)
                     st.metric(label="Final Score Summary", value=f"{score} / {total_q}", delta=f"{int((score/total_q)*100)}% Success Rate")
-
     # ================= 4. STUDY PLANNER MODULE =================
     elif menu == "Study Planner":
         st.markdown("<h1>📅 AI Curriculum & Study Planner</h1>", unsafe_allow_html=True)
