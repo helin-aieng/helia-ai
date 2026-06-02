@@ -697,7 +697,12 @@ else:
                     st.markdown("<h2 style='font-size: 22px;'>📊 Results Summary</h2>", unsafe_allow_html=True)
                     for q in st.session_state.quiz_data["questions"]:
                         ans = st.session_state.user_answers.get(q["id"])
-                        if ans == q["answer"]:
+                        def clean_text(text):
+                            if not text:
+                                return ""
+                            return re.sub(r"^[A-D]\s*[\)|:]?\s*", "", str(text)).strip().lower()
+
+                        if clean_text(ans) == clean_text(q["answer"]):
                             st.success(f"✅ **Question {q['id']}: Correct!**")
                             st.markdown(f"Your answer: {ans}")
                             score += 1
