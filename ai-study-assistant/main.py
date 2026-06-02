@@ -15,7 +15,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Advanced CSS injection for premium SaaS UI/UX look (With Sidebar Conversations View)
+# Advanced CSS injection for UI/UX look (With Sidebar Conversations View)
 st.markdown("""
     <style>
     /* Global App Background & Font Settings */
@@ -211,7 +211,10 @@ def update_session_title(session_id, first_msg):
         response = client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[
-                {"role": "system", "content": "You are a chat session title generator. Analyze the user's first message and generate a clean, professional, and specific title of maximum 3-4 words. Match the language of the user's message. Output ONLY the title itself, without quotes, punctuation, or any introductory prose."},
+                {
+                    "role": "system", 
+                    "content": "You are a chat session title generator. Analyze the user's first message and generate a clean, professional, and specific title of maximum 3-4 words. Match the language of the user's message. Output ONLY the title itself, without quotes, punctuation, or any introductory prose."
+                },
                 {"role": "user", "content": f"First Message: {first_msg}"}
             ],
             max_tokens=15,
@@ -221,7 +224,7 @@ def update_session_title(session_id, first_msg):
         if not clean_title:
             clean_title = first_msg[:24] + "..." if len(first_msg) > 24 else first_msg
     except Exception:
-        # in case of temporary network or API limits failures
+        # Robust fallback mechanism in case of temporary network or API limits failures
         clean_title = first_msg[:24] + "..." if len(first_msg) > 24 else first_msg
 
     with sqlite3.connect(DB_NAME) as conn:
@@ -294,7 +297,7 @@ IDENTITY_PROMPT = (
     "3. Always respond in the language used by the user, but never translate or alter the name 'Helin Gündoğan' when explicitly asked.\n"
     "4. TONALITY & STYLE (BALANCED COMPANION): Do NOT be overly stiff, robotic, or hyper-formal. Avoid corporate phrases like 'Saygılarımla'. "
     "Instead, act like a smart, helpful, polite, and encouraging university study companion. Be clear, professional yet natural, and approachable from the very first message.\n"
-    "5. DYNAMIC MIRROWING & HIGH EQ: Actively monitor the user's conversational style. If the user becomes more casual, uses jokes, or feels stressed about exams, instantly match their energy, soften your tone further, and provide empathetic, warm support.\n"
+    "5. DYNAMIC MIRRORING & HIGH EQ: Actively monitor the user's conversational style. If the user becomes more casual, uses jokes, or feels stressed about exams, instantly match their energy, soften your tone further, and provide empathetic, warm support.\n"
     "6. EMOJI CONSTRAINT: Use emojis very maturely and sparsely (maximum 1 or 2 per response, or none if the context is strictly technical). Never flood the text with emojis.\n"
     "7. TURKISH PERFORMANCE & SYNTAX: When speaking Turkish, you MUST use standard, formal, and non-inverted (kurallı) sentences. "
     "CRITICAL: Keep the verb (yüklem) strictly at the very end of every sentence. Do NOT use inverted sentences. "
@@ -390,7 +393,7 @@ else:
     if old_menu != menu:
         st.session_state.active_feature = None
 
-    # --- CHAT HISTORY SECTIONS MANAGER BLOCK (RENDERED ONLY WHEN MENU MATCHES CHAT) ---
+    # --- CHAT HISTORY SECTIONS MANAGER BLOCK ---
     if menu == "Chat":
         st.sidebar.markdown("<br>", unsafe_allow_html=True)
         if st.sidebar.button("➕ New Chat", type="primary", use_container_width=True):
@@ -440,7 +443,7 @@ else:
     st.sidebar.markdown("<br><hr>", unsafe_allow_html=True)
 
     if menu == "Chat":
-        if st.sidebar.button("🗑️ Delete Current Chat ", type="secondary"):
+        if st.sidebar.button("🗑️ Delete Current Chat Thread", type="secondary"):
             delete_session(st.session_state.current_session_id)
             st.session_state.current_session_id = None
             st.sidebar.info("Conversation thread purged.")
@@ -599,7 +602,7 @@ else:
                 placeholder = st.empty()
                 placeholder.markdown(f"*Preparing {num_questions} math exam questions from the document...*")
                 try:
-                   response = client.chat.completions.create(
+                    response = client.chat.completions.create(
                         model=current_model,
                         messages=[
                             {
@@ -628,7 +631,6 @@ else:
                     
                     raw_text = response.choices[0].message.content
                     
-                    # Regex Engine
                     blocks = raw_text.split("---")
                     parsed_questions = []
                     q_id = 1
@@ -673,7 +675,6 @@ else:
                         </div>
                     """, unsafe_allow_html=True)
                     
-                    # Renders beautiful mathematical equations natively via Streamlit Markdown engine
                     st.markdown(f"**{q['question']}**")
                     
                     user_choice = st.radio(
@@ -700,6 +701,7 @@ else:
                     
                     st.markdown("<br>", unsafe_allow_html=True)
                     st.metric(label="Final Score Summary", value=f"{score} / {total_q}", delta=f"{int((score/total_q)*100)}% Success Rate")
+
     # ================= 4. STUDY PLANNER MODULE =================
     elif menu == "Study Planner":
         st.markdown("<h1>📅 AI Curriculum & Study Planner</h1>", unsafe_allow_html=True)
