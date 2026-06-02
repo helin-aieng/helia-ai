@@ -608,11 +608,14 @@ else:
                             {
                                 "role": "system", 
                                 "content": (
-                                    "You are an elite academic professor. Generate multiple-choice questions from the text.\n"
-                                    "You must perform full mathematical derivations, calculations, and present formulas in standard LaTeX using single dollar signs (e.g., $f(x) = \\sum_{n=0}^{\\infty} a_n x^n$).\n\n"
+                                    "You are an elite academic professor and expert curriculum designer. "
+                                    "Your task is to analyze the provided source text and generate high-fidelity, comprehensive multiple-choice questions.\n\n"
+                                    "ADAPTIVE TEXT PROCESSING RULES:\n"
+                                    "1. IF the text is conversational, historical, linguistic, or theoretical: Focus on core facts, concepts, definitions, and logical reasoning.\n"
+                                    "2. IF the text contains mathematics, physics, or computing formulas: Perform full precise derivations/calculations, and seamlessly present formulas in standard LaTeX using single dollar signs (e.g., $f(x) = \\sum_{n=0}^{\\infty} a_n x^n$).\n\n"
                                     "CRITICAL OUTPUT FORMAT:\n"
                                     "You must output the quiz using the exact plain-text pattern below. Do NOT use markdown bold on identifiers. Output nothing else:\n\n"
-                                    "QUESTION: [Write the question here, use $ for LaTeX]\n"
+                                    "QUESTION: [Write the question here, use $ for LaTeX if applicable]\n"
                                     "A) [Option A]\n"
                                     "B) [Option B]\n"
                                     "C) [Option C]\n"
@@ -623,7 +626,7 @@ else:
                             },
                             {
                                 "role": "user", 
-                                "content": f"Generate exactly {num_questions} mathematical questions following the system pattern based on this material:\n\n{st.session_state.pdf_text}"
+                                "content": f"Generate exactly {num_questions} high-quality quiz questions following the system pattern based on this material:\n\n{st.session_state.pdf_text}"
                             }
                         ],
                         temperature=0.3
