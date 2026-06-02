@@ -15,7 +15,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Advanced CSS injection for premium SaaS UI/UX look (User-Friendly Version)
+# Advanced CSS injection for premium SaaS UI/UX look (With Sidebar Conversations View)
 st.markdown("""
     <style>
     /* Global App Background & Font Settings */
@@ -30,7 +30,7 @@ st.markdown("""
         background-color: #0b0f19 !important; 
         border-right: 1px solid #1f2937 !important;
     }
-    div[data-testid="stSidebarUserContent"] { padding-top: 2rem; }
+    div[data-testid="stSidebarUserContent"] { padding-top: 1.5rem; }
     
     /* Premium Dashboard Titles */
     div.stMarkdown div[data-testid="stMarkdownContainer"] h1 {
@@ -82,14 +82,37 @@ st.markdown("""
         color: #ffffff !important;
     }
     
+    /* Sidebar Conversation History List Buttons */
+    .chat-history-btn>button {
+        background: transparent !important;
+        border: 1px solid rgba(255, 255, 255, 0.05) !important;
+        color: #9ca3af !important;
+        text-align: left !important;
+        padding: 8px 12px !important;
+        font-size: 13px !important;
+        font-weight: 400 !important;
+        border-radius: 8px !important;
+        margin-bottom: 5px !important;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .chat-history-btn>button:hover {
+        background: rgba(59, 130, 246, 0.1) !important;
+        border-color: rgba(59, 130, 246, 0.4) !important;
+        color: #60a5fa !important;
+        transform: none !important;
+        box-shadow: none !important;
+    }
+    
     /* Inputs Styling */
-    .stTextInput input, .stTextArea textarea { 
+    .stTextInput input, .stTextArea textarea, .stNumberInput input { 
         background-color: #111827 !important;
         border: 1px solid #374151 !important;
         color: #ffffff !important; 
         border-radius: 10px !important;
     }
-    .stTextInput input:focus, .stTextArea textarea:focus {
+    .stTextInput input:focus, .stTextArea textarea:focus, .stNumberInput input:focus {
         border-color: #3b82f6 !important;
     }
     
@@ -138,12 +161,23 @@ def init_db():
             password TEXT
         )
         """)
+        # Added session_id to separate different conversation tracks
         cur.execute("""
         CREATE TABLE IF NOT EXISTS messages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT,
             user TEXT,
             role TEXT,
             content TEXT
+        )
+        """)
+        # Metadata table to map session hashes to clean dynamic titles
+        cur.execute("""
+        CREATE TABLE IF NOT EXISTS chat_sessions (
+            session_id TEXT UNIQUE,
+            username TEXT,
+            title TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
         """)
         conn.commit()
@@ -153,28 +187,61 @@ init_db()
 def hash_pw(pw):
     return hashlib.sha256(pw.encode()).hexdigest()
 
-def save_message(user, role, content):
+# ================= MULTI-SESSION ARCHITECTURE FUNCTIONS =================
+def create_new_session(username):
+    session_id = f"sess_{int(time.time()*1000)}"
     with sqlite3.connect(DB_NAME) as conn:
         cur = conn.cursor()
         cur.execute(
-            "INSERT INTO messages (user, role, content) VALUES (?, ?, ?)",
-            (user, role, content)
+            "INSERT INTO chat_sessions (session_id, username, title) VALUES (?, ?, ?)",
+            (session_id, username, "New Chat / Yeni Sohbet")
+        )
+        conn.commit()
+    return session_id
+
+def update_session_title(session_id, first_msg):
+    # Truncate first message to create a clean, elegant sidebar string
+    clean_title = first_msg[:24] + "..." if len(first_msg) > 24 else first_msg
+    with sqlite3.connect(DB_NAME) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE chat_sessions SET title=? WHERE session_id=?",
+            (clean_title, session_id)
         )
         conn.commit()
 
-def get_messages(user):
+def get_user_sessions(username):
     with sqlite3.connect(DB_NAME) as conn:
         cur = conn.cursor()
         cur.execute(
-            "SELECT role, content FROM messages WHERE user=? ORDER BY id ASC",
-            (user,)
+            "SELECT session_id, title FROM chat_sessions WHERE username=? ORDER BY created_at DESC",
+            (username,)
+        )
+        return cur.fetchall()
+
+def save_message(session_id, user, role, content):
+    with sqlite3.connect(DB_NAME) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO messages (session_id, user, role, content) VALUES (?, ?, ?, ?)",
+            (session_id, user, role, content)
+        )
+        conn.commit()
+
+def get_messages(session_id):
+    with sqlite3.connect(DB_NAME) as conn:
+        cur = conn.cursor()
+        cur.execute(
+            "SELECT role, content FROM messages WHERE session_id=? ORDER BY id ASC",
+            (session_id,)
         )
         return [{"role": r, "content": c} for r, c in cur.fetchall()]
 
-def clear_chat(user):
+def delete_session(session_id):
     with sqlite3.connect(DB_NAME) as conn:
         cur = conn.cursor()
-        cur.execute("DELETE FROM messages WHERE user=?", (user,))
+        cur.execute("DELETE FROM messages WHERE session_id=?", (session_id,))
+        cur.execute("DELETE FROM chat_sessions WHERE session_id=?", (session_id,))
         conn.commit()
 
 # ================= ERROR HANDLING HELPER =================
@@ -225,6 +292,9 @@ if "pdf_text" not in st.session_state:
 
 if "active_feature" not in st.session_state:
     st.session_state.active_feature = None
+
+if "current_session_id" not in st.session_state:
+    st.session_state.current_session_id = None
 
 # ================= AUTHENTICATION LAYER =================
 if st.session_state.user is None:
@@ -277,6 +347,14 @@ else:
     if "user_session" not in st.query_params:
         st.query_params["user_session"] = st.session_state.user
 
+    # Establish an initial chat channel session tracking vector if none exists
+    if not st.session_state.current_session_id:
+        existing_sess = get_user_sessions(st.session_state.user)
+        if existing_sess:
+            st.session_state.current_session_id = existing_sess[0][0]
+        else:
+            st.session_state.current_session_id = create_new_session(st.session_state.user)
+
     # --- SIDEBAR CONTROL CENTER ---
     st.sidebar.markdown("<h2 style='font-size: 24px; font-weight: 800; color: #ffffff;'>⚡ Control Panel</h2>", unsafe_allow_html=True)
     st.sidebar.markdown("---")
@@ -289,6 +367,25 @@ else:
     st.session_state.current_menu = menu
     if old_menu != menu:
         st.session_state.active_feature = None
+
+    # --- CHAT HISTORY SECTIONS MANAGER BLOCK (RENDERED ONLY WHEN MENU MATCHES CHAT) ---
+    if menu == "Chat":
+        st.sidebar.markdown("<br>", unsafe_allow_html=True)
+        if st.sidebar.button("➕ New Chat / Yeni Sohbet", type="primary", use_container_width=True):
+            st.session_state.current_session_id = create_new_session(st.session_state.user)
+            st.rerun()
+            
+        st.sidebar.markdown("<p style='font-size:12px; font-weight:700; color:#4b5563; margin-bottom:8px; letter-spacing:0.05em;'>RECENT CHATS</p>", unsafe_allow_html=True)
+        user_history = get_user_sessions(st.session_state.user)
+        
+        for s_id, title in user_history:
+            # Highlight current active session visually
+            prefix = "💬 " if s_id != st.session_state.current_session_id else "🚀 "
+            st.sidebar.markdown(f'<div class="chat-history-btn">', unsafe_allow_html=True)
+            if st.sidebar.button(f"{prefix}{title}", key=f"nav_{s_id}", use_container_width=True):
+                st.session_state.current_session_id = s_id
+                st.rerun()
+            st.sidebar.markdown('</div>', unsafe_allow_html=True)
 
     st.sidebar.markdown("<br>", unsafe_allow_html=True)
 
@@ -321,18 +418,26 @@ else:
     # Control Operations
     st.sidebar.markdown("<br><hr>", unsafe_allow_html=True)
 
-    if st.sidebar.button("🔄 Clear Chat History", type="secondary"):
-        clear_chat(st.session_state.user)
-        st.session_state.active_feature = None
-        st.sidebar.info("Chat history cleared.")
-        time.sleep(0.4)
-        st.rerun()
+    if menu == "Chat":
+        if st.sidebar.button("🗑️ Delete Current Chat Thread", type="secondary"):
+            delete_session(st.session_state.current_session_id)
+            st.session_state.current_session_id = None
+            st.sidebar.info("Conversation thread purged.")
+            time.sleep(0.4)
+            st.rerun()
+    else:
+        if st.sidebar.button("🔄 Clear System State", type="secondary"):
+            st.session_state.active_feature = None
+            st.sidebar.info("Operational variables flushed clean.")
+            time.sleep(0.4)
+            st.rerun()
         
     if st.sidebar.button("🚪 Log Out", type="primary"):
         st.query_params.clear()
         st.session_state.user = None
         st.session_state.pdf_text = ""
         st.session_state.active_feature = None
+        st.session_state.current_session_id = None
         st.rerun()
 
     # Session Status Badge
@@ -345,12 +450,13 @@ else:
 
     current_model = MODEL_ROUTER[menu]
 
-    # ================= 1. CHAT MODULE =================
+    # ================= 1. CHAT MODULE (MULTI-SESSION UPDATED) =================
     if menu == "Chat":
         st.markdown("<h1>🧠 Workspace Smart Chat</h1>", unsafe_allow_html=True)
         st.caption("Ask questions, explore academic concepts, or analyze your uploaded document lines.")
 
-        messages = get_messages(st.session_state.user)
+        # Pull historical arrays bound specifically to current tracked session_id node
+        messages = get_messages(st.session_state.current_session_id)
         for msg in messages:
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
@@ -360,11 +466,16 @@ else:
         if prompt:
             with st.chat_message("user"):
                 st.markdown(prompt)
-            save_message(st.session_state.user, "user", prompt)
+            
+            # Dynamic titling optimization trick if this is the initial token message line entry
+            if len(messages) == 0:
+                update_session_title(st.session_state.current_session_id, prompt)
+                
+            save_message(st.session_state.current_session_id, st.session_state.user, "user", prompt)
 
             pdf_context = st.session_state.pdf_text if use_pdf else ""
             system_prompt = f"{IDENTITY_PROMPT}\nYou are Helia AI, an advanced study assistant. Use markdown formatting.\n\nPDF CONTEXT:\n{pdf_context}"
-            full_messages = [{"role": "system", "content": system_prompt}] + get_messages(st.session_state.user)
+            full_messages = [{"role": "system", "content": system_prompt}] + get_messages(st.session_state.current_session_id)
 
             with st.chat_message("assistant"):
                 placeholder = st.empty()
@@ -388,7 +499,11 @@ else:
                                 time.sleep(0.002)  
 
                     placeholder.markdown(output)
-                    save_message(st.session_state.user, "assistant", output)
+                    save_message(st.session_state.current_session_id, st.session_state.user, "assistant", output)
+                    
+                    # Force a lightweight refresh if initial query execution to sync sidebar titles layout immediately
+                    if len(messages) == 0:
+                        st.rerun()
 
                 except Exception as e:
                     handle_groq_error(e, placeholder)
@@ -450,9 +565,21 @@ else:
             if "user_answers" not in st.session_state:
                 st.session_state.user_answers = {}
 
-            if st.button("Build My Practice Exam", type="primary"):
+            with st.container():
+                num_questions = st.number_input(
+                    "How many questions would you like to generate?",
+                    min_value=1,
+                    max_value=10,
+                    value=3,
+                    step=1,
+                    key="quiz_num_input"
+                )
+                st.markdown("<br>", unsafe_allow_html=True)
+                generate_btn = st.button("Build My Practice Exam", type="primary")
+
+            if generate_btn:
                 placeholder = st.empty()
-                placeholder.markdown("*Generating exam questions from document...*")
+                placeholder.markdown(f"*{num_questions} adet sınav sorusu dökümandan hazırlanıyor...*")
                 try:
                     response = client.chat.completions.create(
                         model=current_model,
@@ -460,7 +587,7 @@ else:
                         messages=[
                             {"role": "system", "content": "You are a strict exam generator. You must output raw JSON only, matching the exact requested structure. Do not include any conversational prose."},
                             {"role": "user", "content": f"""
-                            Create exactly 3 multiple-choice questions based on the text below.
+                            Create exactly {num_questions} multiple-choice questions based on the text below.
                             Provide the output in this strict JSON format:
                             {{
                                 "questions": [
