@@ -616,17 +616,24 @@ else:
                                     "ADAPTIVE TEXT PROCESSING RULES:\n"
                                     "1. IF the text is conversational, historical, linguistic, or theoretical: Focus on core facts, concepts, definitions, and logical reasoning.\n"
                                     "2. IF the text contains mathematics, physics, or computing formulas: Perform full precise derivations/calculations, and seamlessly present formulas in standard LaTeX using single dollar signs (e.g., $f(x) = \\sum_{n=0}^{\\infty} a_n x^n$).\n\n"
-                                    "CRITICAL OUTPUT FORMAT:\n"
-                                    "You must output the quiz using the exact plain-text pattern below. Do NOT use markdown bold on identifiers. Output nothing else:\n\n"
+                                    "CRITICAL OUTPUT FORMAT RULES:\n"
+                                    "- You must output the quiz using the exact plain-text pattern below.\n"
+                                    "- Do NOT include any letters like A), B), C), D) inside the options array or the correct answer text itself. Just provide the raw answer text.\n"
+                                    "- Output nothing else outside the pattern structure.\n\n"
                                     "QUESTION: [Write the question here, use $ for LaTeX if applicable]\n"
-                                    "A) [Option A]\n"
-                                    "B) [Option B]\n"
-                                    "C) [Option C]\n"
-                                    "D) [Option D]\n"
-                                    "CORRECT: [Write the exact string matching the correct option]\n"
+                                    "A) [Option A text ONLY, do NOT start with A or A)]\n"
+                                    "B) [Option B text ONLY, do NOT start with B or B)]\n"
+                                    "C) [Option C text ONLY, do NOT start with C or C)]\n"
+                                    "D) [Option D text ONLY, do NOT start with D or D)]\n"
+                                    "CORRECT: [Write the exact option string matching the correct option, without any letter prefix]\n"
                                     "---"
                                 )
                             },
+                            {
+                                "role": "user", 
+                                "content": f"Generate exactly {num_questions} high-quality quiz questions following the system pattern based on this material:\n\n{st.session_state.pdf_text}"
+                            }
+                        ],
                             {
                                 "role": "user", 
                                 "content": f"Generate exactly {num_questions} high-quality quiz questions following the system pattern based on this material:\n\n{st.session_state.pdf_text}"
