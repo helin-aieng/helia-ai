@@ -8,31 +8,26 @@ import json
 from PyPDF2 import PdfReader
 from groq import Groq
 
-# ================= CONFIG & MODERN UI GLASSMORPHISM DECORATION =================
+# ================= 1. CONFIG & SYSTEM GLASSMORPHISM DECORATION =================
 st.set_page_config(
     page_title="Helia AI • Smart Study Workspace",
     page_icon="🧠",
     layout="wide"
 )
 
-# Advanced CSS injection for UI/UX look (With Sidebar Conversations View)
+# Advanced CSS injection for premium SaaS UI/UX look
 st.markdown("""
     <style>
-    /* Global App Background & Font Settings */
     .stApp { 
         background: radial-gradient(circle at top right, #111827, #030712); 
         color: #f3f4f6;
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }
-    
-    /* Sidebar Overhaul */
     section[data-testid="stSidebar"] { 
         background-color: #0b0f19 !important; 
         border-right: 1px solid #1f2937 !important;
     }
     div[data-testid="stSidebarUserContent"] { padding-top: 1.5rem; }
-    
-    /* Premium Dashboard Titles */
     div.stMarkdown div[data-testid="stMarkdownContainer"] h1 {
         font-weight: 800;
         letter-spacing: -0.05em;
@@ -40,8 +35,6 @@ st.markdown("""
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
     }
-    
-    /* Custom Card Containers for Results */
     .premium-card {
         background: rgba(17, 24, 39, 0.7);
         backdrop-filter: blur(12px);
@@ -51,8 +44,6 @@ st.markdown("""
         margin-bottom: 20px;
         box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
     }
-    
-    /* Elegant Interactive Buttons */
     .stButton>button { 
         width: 100%; 
         border-radius: 10px !important; 
@@ -69,8 +60,6 @@ st.markdown("""
         box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.4) !important;
         background: linear-gradient(135deg, #3b82f6, #1d4ed8) !important;
     }
-    
-    /* Secondary Action Buttons (Clear Chat, etc.) */
     div[data-testid="stSidebar"] .stButton>button {
         background: #111827 !important;
         border: 1px solid #374151 !important;
@@ -81,8 +70,6 @@ st.markdown("""
         border-color: #4b5563 !important;
         color: #ffffff !important;
     }
-    
-    /* Sidebar Conversation History List Buttons */
     .chat-history-btn>button {
         background: transparent !important;
         border: 1px solid rgba(255, 255, 255, 0.05) !important;
@@ -104,8 +91,6 @@ st.markdown("""
         transform: none !important;
         box-shadow: none !important;
     }
-    
-    /* Inputs Styling */
     .stTextInput input, .stTextArea textarea, .stNumberInput input { 
         background-color: #111827 !important;
         border: 1px solid #374151 !important;
@@ -115,16 +100,12 @@ st.markdown("""
     .stTextInput input:focus, .stTextArea textarea:focus, .stNumberInput input:focus {
         border-color: #3b82f6 !important;
     }
-    
-    /* Radio Buttons Layout for Interactive Quiz */
     div[data-testid="stRadio"] {
         background: #111827;
         padding: 15px;
         border-radius: 12px;
         border: 1px solid #1f2937;
     }
-    
-    /* Utility Metrics */
     div[data-testid="stMetricValue"] {
         font-size: 36px !important;
         font-weight: 800 !important;
@@ -133,7 +114,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# ================= INITIALIZE GROQ CLIENT =================
+# ================= 2. INITIALIZE GROQ CLIENT =================
 try:
     groq_api_key = st.secrets["GROQ_API_KEY"]
     client = Groq(api_key=groq_api_key)
@@ -141,7 +122,7 @@ except Exception as e:
     st.error("Groq API Key not found! Please configure it in Streamlit Secrets.")
     st.stop()
 
-# ================= OPTIMIZED MODEL ROUTER =================
+# Optimized Feature Router
 MODEL_ROUTER = {
     "Chat": "llama-3.3-70b-versatile",       
     "Summary": "llama-3.3-70b-versatile",    
@@ -149,43 +130,20 @@ MODEL_ROUTER = {
     "Study Planner": "llama-3.1-8b-instant"  
 }
 
-# ================= THREAD-SAFE DATABASE LAYER =================
+# ================= 3. DATABASE LAYER =================
 DB_NAME = "helia.db"
 
 def init_db():
     with sqlite3.connect(DB_NAME) as conn:
         cur = conn.cursor()
-        cur.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            username TEXT UNIQUE,
-            password TEXT
-        )
-        """)
-        # Base table template creation
-        cur.execute("""
-        CREATE TABLE IF NOT EXISTS messages (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            user TEXT,
-            role TEXT,
-            content TEXT
-        )
-        """)
-        
-        # SAFE MIGRATION: Catch database layout versioning errors dynamically
+        cur.execute("CREATE TABLE IF NOT EXISTS users (username TEXT UNIQUE, password TEXT)")
+        cur.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY AUTOINCREMENT, user TEXT, role TEXT, content TEXT)")
         try:
             cur.execute("SELECT session_id FROM messages LIMIT 1")
         except sqlite3.OperationalError:
-            # Inject session column if legacy DB architecture structure is discovered
             cur.execute("ALTER TABLE messages ADD COLUMN session_id TEXT")
             
-        cur.execute("""
-        CREATE TABLE IF NOT EXISTS chat_sessions (
-            session_id TEXT UNIQUE,
-            username TEXT,
-            title TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-        """)
+        cur.execute("CREATE TABLE IF NOT EXISTS chat_sessions (session_id TEXT UNIQUE, username TEXT, title TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
         conn.commit()
 
 init_db()
@@ -193,21 +151,17 @@ init_db()
 def hash_pw(pw):
     return hashlib.sha256(pw.encode()).hexdigest()
 
-# ================= MULTI-SESSION ARCHITECTURE FUNCTIONS =================
+# ================= 4. MULTI-SESSION UTILITIES =================
 def create_new_session(username):
     session_id = f"sess_{int(time.time()*1000)}"
     with sqlite3.connect(DB_NAME) as conn:
         cur = conn.cursor()
-        cur.execute(
-            "INSERT INTO chat_sessions (session_id, username, title) VALUES (?, ?, ?)",
-            (session_id, username, "New Chat")
-        )
+        cur.execute("INSERT INTO chat_sessions (session_id, username, title) VALUES (?, ?, ?)", (session_id, username, "New Chat"))
         conn.commit()
     return session_id
 
 def update_session_title(session_id, first_msg):
     try:
-        # Use a comprehensive topic title from the initial prompt
         response = client.chat.completions.create(
             model="llama-3.1-8b-instant",
             messages=[
@@ -224,42 +178,29 @@ def update_session_title(session_id, first_msg):
         if not clean_title:
             clean_title = first_msg[:24] + "..." if len(first_msg) > 24 else first_msg
     except Exception:
-        # Robust fallback mechanism in case of temporary network or API limits failures
         clean_title = first_msg[:24] + "..." if len(first_msg) > 24 else first_msg
 
     with sqlite3.connect(DB_NAME) as conn:
         cur = conn.cursor()
-        cur.execute(
-            "UPDATE chat_sessions SET title=? WHERE session_id=?",
-            (clean_title, session_id)
-        )
+        cur.execute("UPDATE chat_sessions SET title=? WHERE session_id=?", (clean_title, session_id))
         conn.commit()
 
 def get_user_sessions(username):
     with sqlite3.connect(DB_NAME) as conn:
         cur = conn.cursor()
-        cur.execute(
-            "SELECT session_id, title FROM chat_sessions WHERE username=? ORDER BY created_at DESC",
-            (username,)
-        )
+        cur.execute("SELECT session_id, title FROM chat_sessions WHERE username=? ORDER BY created_at DESC", (username,))
         return cur.fetchall()
 
 def save_message(session_id, user, role, content):
     with sqlite3.connect(DB_NAME) as conn:
         cur = conn.cursor()
-        cur.execute(
-            "INSERT INTO messages (session_id, user, role, content) VALUES (?, ?, ?, ?)",
-            (session_id, user, role, content)
-        )
+        cur.execute("INSERT INTO messages (session_id, user, role, content) VALUES (?, ?, ?, ?)", (session_id, user, role, content))
         conn.commit()
 
 def get_messages(session_id):
     with sqlite3.connect(DB_NAME) as conn:
         cur = conn.cursor()
-        cur.execute(
-            "SELECT role, content FROM messages WHERE session_id=? ORDER BY id ASC",
-            (session_id,)
-        )
+        cur.execute("SELECT role, content FROM messages WHERE session_id=? ORDER BY id ASC", (session_id,))
         return [{"role": r, "content": c} for r, c in cur.fetchall()]
 
 def delete_session(session_id):
@@ -269,11 +210,10 @@ def delete_session(session_id):
         cur.execute("DELETE FROM chat_sessions WHERE session_id=?", (session_id,))
         conn.commit()
 
-# ================= ERROR HANDLING HELPER =================
+# ================= 5. SYSTEM SYSTEMIC ERROR HANDLER =================
 def handle_groq_error(error_obj, UI_placeholder):
     error_msg = str(error_obj)
     UI_placeholder.empty()  
-    
     if "429" in error_msg or "rate_limit" in error_msg:
         wait_time = "a few minutes"
         match = re.search(r"try again in (\d+m\d+\.\d+s|\d+m|\d+\.\d+s|\d+s)", error_msg)
@@ -283,13 +223,11 @@ def handle_groq_error(error_obj, UI_placeholder):
                 wait_time = raw_time.replace("m", " minute(s) ").replace("s", " second(s)")
             except:
                 pass
-        
-        st.error(f"⏳ **Daily Token Limit Reached!**\n\nHelia AI has reached its API threshold due to high traffic or dense context. The system window will reset in approximately **{wait_time}**. Please take a short break and try again.")
+        st.error(f"⏳ **Daily Token Limit Reached!**\n\nThe system window will reset in approximately **{wait_time}**. Please take a short break and try again.")
     else:
         st.error(f"⚠️ **API Execution Error:** {error_msg}")
 
-
-# ================= GLOBAL IDENTITY PROMPT =================
+# ================= 6. GLOBAL IDENTITY & EMOTIONAL PROMPT =================
 IDENTITY_PROMPT = (
     "CRITICAL IDENTITY, LANGUAGE & EMOTIONAL INTELLIGENCE RULES:\n"
     "1. Your name is Helia AI. You are an advanced study assistant completely created and developed by Helin Gündoğan.\n"
@@ -301,30 +239,26 @@ IDENTITY_PROMPT = (
     "5. DYNAMIC MIRRORING & HIGH EQ: Actively monitor the user's conversational style. If the user becomes more casual, uses jokes, or feels stressed about exams, instantly match their energy, soften your tone further, and provide empathetic, warm support.\n"
     "6. PROACTIVE ENGAGEMENT & TOPIC BRANCHING: At the end of your response, never leave the conversation dead. "
     "Instead of generic placeholders, ask 1 clear, engaging, and highly relevant follow-up question related to the discussed topic to guide the student forward, expand their knowledge, or offer further personalized study assistance.\n"
-    "7. EMOJI CONSTRAINT: Use emojis very maturely and sparsely (maximum 1 or 2 per response, or none if the context is strictly technical). Never flood the text with emojis.\n"
+    "7. EMOJI CONSTRAINT: Use emojis very maturely and sparsely (maximum 1 or 2 per response, or none if the context is strictly technical).\n"
     "8. TURKISH PERFORMANCE & SYNTAX: When speaking Turkish, you MUST use standard, formal, and non-inverted (kurallı) sentences. "
     "CRITICAL: Keep the verb (yüklem) strictly at the very end of every sentence. Do NOT use inverted sentences. "
-    "STRICT LANGUAGE PURITY: Use ONLY native, pure, and accurate Turkish words. Never mix English words into Turkish sentences (e.g., do NOT write 'feelingsini', 'meetinge', etc.). "
-    "Avoid hybrid 'Plaza Turkish' completely. Ensure it feels organic and native, avoiding literal translations from English structure. "
+    "STRICT LANGUAGE PURITY: Use ONLY native, pure, and accurate Turkish words. Never mix English words into Turkish sentences. Avoid hybrid 'Plaza Turkish' completely. "
     "Never deform words (e.g., ALWAYS write 'diziler', NEVER write 'dizieler').\n"
 )
 
-# ================= SESSION STATE & URL PARAMETERS =================
+# ================= 7. ROUTING STATE ENGINE =================
 url_user = st.query_params.get("user_session", None)
 
 if "user" not in st.session_state:
     st.session_state.user = url_user
-
 if "pdf_text" not in st.session_state:
     st.session_state.pdf_text = ""
-
 if "active_feature" not in st.session_state:
     st.session_state.active_feature = None
-
 if "current_session_id" not in st.session_state:
     st.session_state.current_session_id = None
 
-# ================= AUTHENTICATION LAYER =================
+# ================= 8. SECURITY & ACCESS WALL =================
 if st.session_state.user is None:
     st.markdown("<br><br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 1.8, 1])
@@ -340,21 +274,17 @@ if st.session_state.user is None:
             p = st.text_input("Password", type="password", key="login_pass", placeholder="Enter your password...")
             remember_me = st.checkbox("Keep me logged in", value=True)
             st.markdown("<br>", unsafe_allow_html=True)
-            
             if st.button("Access Workspace", type="primary"):
                 with sqlite3.connect(DB_NAME) as conn:
                     cur = conn.cursor()
-                    cur.execute(
-                        "SELECT * FROM users WHERE username=? AND password=?",
-                        (u, hash_pw(p))
-                    )
+                    cur.execute("SELECT * FROM users WHERE username=? AND password=?", (u, hash_pw(p)))
                     if cur.fetchone():
                         st.session_state.user = u
                         if remember_me:
                             st.query_params["user_session"] = u
                         st.rerun()
                     else:
-                        st.error("Invalid username or password. Please try again.")
+                        st.error("Invalid username or password.")
 
         with tab2:
             u2 = st.text_input("Choose Username", key="reg_user", placeholder="Pick a unique username...")
@@ -366,16 +296,15 @@ if st.session_state.user is None:
                         cur = conn.cursor()
                         cur.execute("INSERT INTO users VALUES (?, ?)", (u2, hash_pw(p2)))
                         conn.commit()
-                    st.success("Account created successfully! You can now log in.")
+                    st.success("Account created successfully!")
                 except:
                     st.error("This username is already taken.")
 
-# ================= MAIN APPLICATION LAYER =================
+# ================= 9. CORE WORKSPACE APPLICATION =================
 else:
     if "user_session" not in st.query_params:
         st.query_params["user_session"] = st.session_state.user
 
-    # Establish an initial chat channel session tracking vector if none exists
     if not st.session_state.current_session_id:
         existing_sess = get_user_sessions(st.session_state.user)
         if existing_sess:
@@ -383,20 +312,17 @@ else:
         else:
             st.session_state.current_session_id = create_new_session(st.session_state.user)
 
-    # --- SIDEBAR CONTROL CENTER ---
+    # Sidebar Panel Controls
     st.sidebar.markdown("<h2 style='font-size: 24px; font-weight: 800; color: #ffffff;'>⚡ Control Panel</h2>", unsafe_allow_html=True)
     st.sidebar.markdown("---")
 
     old_menu = st.session_state.get("current_menu", "Chat")
-    menu = st.sidebar.selectbox(
-        "Select Feature",
-        ["Chat", "Summary", "Quiz Maker", "Study Planner"]
-    )
+    menu = st.sidebar.selectbox("Select Feature", ["Chat", "Summary", "Quiz Maker", "Study Planner"])
     st.session_state.current_menu = menu
     if old_menu != menu:
         st.session_state.active_feature = None
 
-    # --- CHAT HISTORY SECTIONS MANAGER BLOCK ---
+    # Chat Sessions Rendering Vector
     if menu == "Chat":
         st.sidebar.markdown("<br>", unsafe_allow_html=True)
         if st.sidebar.button("➕ New Chat", type="primary", use_container_width=True):
@@ -405,18 +331,15 @@ else:
             
         st.sidebar.markdown("<p style='font-size:12px; font-weight:700; color:#4b5563; margin-bottom:8px; letter-spacing:0.05em;'>RECENT CHATS</p>", unsafe_allow_html=True)
         user_history = get_user_sessions(st.session_state.user)
-        
         for s_id, title in user_history:
             prefix = "💬 " if s_id != st.session_state.current_session_id else "🚀 "
-            st.sidebar.markdown(f'<div class="chat-history-btn">', unsafe_allow_html=True)
+            st.sidebar.markdown('<div class="chat-history-btn">', unsafe_allow_html=True)
             if st.sidebar.button(f"{prefix}{title}", key=f"nav_{s_id}", use_container_width=True):
                 st.session_state.current_session_id = s_id
                 st.rerun()
             st.sidebar.markdown('</div>', unsafe_allow_html=True)
 
     st.sidebar.markdown("<br>", unsafe_allow_html=True)
-
-    # USER-FRIENDLY FILE UPLOADER UI
     file = st.sidebar.file_uploader("📘 Upload Study Material (PDF)", type=["pdf"])
 
     if file:
@@ -426,37 +349,30 @@ else:
             text = ""
             for page in reader.pages:
                 extracted = page.extract_text()
-                if extracted:
-                    text += extracted + "\n"
-
+                if extracted: text += extracted + "\n"
             if text.strip() == "":
-                st.sidebar.error("Could not read PDF text. Is it a scanned image?")
+                st.sidebar.error("Could not read PDF text.")
             else:
                 st.session_state.pdf_text = text[:25000]
-                st.sidebar.success(f" Ready: {len(st.session_state.pdf_text)} characters")
+                st.sidebar.success(f" Ready: {len(st.session_state.pdf_text)} chars")
         except Exception as e:
             st.sidebar.error(f"File Error: {e}")
 
-    # Expandable Advanced Settings
+    # Advanced Settings Slider (Renamed from Advanced Tuning)
     with st.sidebar.expander("⚙️ Advanced Settings"):
         temperature = st.slider("Creativity (Temperature)", 0.0, 1.5, 0.3)
         use_pdf = st.toggle("Include PDF document in Chat", value=True)
 
-    # Control Operations
     st.sidebar.markdown("<br><hr>", unsafe_allow_html=True)
 
     if menu == "Chat":
         if st.sidebar.button("🗑️ Delete Current Chat Thread", type="secondary"):
             delete_session(st.session_state.current_session_id)
             st.session_state.current_session_id = None
-            st.sidebar.info("Conversation thread purged.")
-            time.sleep(0.4)
             st.rerun()
     else:
         if st.sidebar.button("🔄 Clear System State", type="secondary"):
             st.session_state.active_feature = None
-            st.sidebar.info("Operational variables flushed clean.")
-            time.sleep(0.4)
             st.rerun()
         
     if st.sidebar.button("🚪 Log Out", type="primary"):
@@ -467,7 +383,6 @@ else:
         st.session_state.current_session_id = None
         st.rerun()
 
-    # Session Status Badge
     st.sidebar.markdown(f"""
         <div style='background-color: #0f172a; padding: 14px; border-radius: 12px; border: 1px solid #1e293b; border-left: 4px solid #2563eb; margin-top: 20px;'>
             <p style='margin: 0; font-size: 11px; color: #3b82f6; font-weight: 800; letter-spacing: 0.05em;'>ACTIVE SESSION</p>
@@ -477,7 +392,7 @@ else:
 
     current_model = MODEL_ROUTER[menu]
 
-    # ================= 1. CHAT MODULE (MULTI-SESSION UPDATED) =================
+    # ================= MODULE 1: CHAT SYSTEM =================
     if menu == "Chat":
         st.markdown("<h1>🧠 Workspace Smart Chat</h1>", unsafe_allow_html=True)
         st.caption("Ask questions, explore academic concepts, or analyze your uploaded document lines.")
@@ -492,29 +407,21 @@ else:
         if prompt:
             with st.chat_message("user"):
                 st.markdown(prompt)
-            
             if len(messages) == 0:
                 update_session_title(st.session_state.current_session_id, prompt)
                 
             save_message(st.session_state.current_session_id, st.session_state.user, "user", prompt)
 
             pdf_context = st.session_state.pdf_text if use_pdf else ""
-            system_prompt = f"{IDENTITY_PROMPT}\nYou are Helia AI, an advanced study assistant. Use markdown formatting.\n\nPDF CONTEXT:\n{pdf_context}"
+            system_prompt = f"{IDENTITY_PROMPT}\nYou are Helia AI, an advanced study assistant.\n\nPDF CONTEXT:\n{pdf_context}"
             full_messages = [{"role": "system", "content": system_prompt}] + get_messages(st.session_state.current_session_id)
 
             with st.chat_message("assistant"):
                 placeholder = st.empty()
                 output = ""
                 placeholder.markdown("*Thinking...*")
-
                 try:
-                    stream = client.chat.completions.create(
-                        model=current_model,
-                        messages=full_messages,
-                        stream=True,
-                        temperature=temperature
-                    )
-
+                    stream = client.chat.completions.create(model=current_model, messages=full_messages, stream=True, temperature=temperature)
                     for chunk in stream:
                         content = chunk.choices[0].delta.content
                         if content:
@@ -522,17 +429,14 @@ else:
                                 output += char
                                 placeholder.markdown(output + " ▌")
                                 time.sleep(0.002)  
-
                     placeholder.markdown(output)
                     save_message(st.session_state.current_session_id, st.session_state.user, "assistant", output)
-                    
                     if len(messages) == 0:
                         st.rerun()
-
                 except Exception as e:
                     handle_groq_error(e, placeholder)
 
-    # ================= 2. SUMMARY MODULE =================
+    # ================= MODULE 2: COMPREHENSIVE SUMMARY =================
     elif menu == "Summary":
         st.markdown("<h1>📚 Comprehensive Summary Assistant</h1>", unsafe_allow_html=True)
         st.caption("Extract clear definitions, key themes, and main structures from your document instantly.")
@@ -553,17 +457,7 @@ else:
                         model=current_model,
                         messages=[
                             {"role": "system", "content": IDENTITY_PROMPT},
-                            {"role": "user", "content": f"""
-                            You are an expert academic research assistant. Analyze the following source text deeply and extract a high-fidelity summary.
-                            
-                            CRITICAL INSTRUCTIONS:
-                            1. Structure your output clearly using professional Markdown: Use bold headers for core themes, and clean bullet points for sub-concepts.
-                            2. Extract and define all technical jargon, formulas, or key concepts found in the text.
-                            3. Avoid generic filler. Capture the exact technical essence and relationships between concepts.
-                            
-                            SOURCE TEXT TO ANALYZE:
-                            {st.session_state.pdf_text}
-                            """}
+                            {"role": "user", "content": f"Analyze the following source text deeply and extract a high-fidelity Markdown summary defining core structures/concepts:\n\n{st.session_state.pdf_text}"}
                         ],
                         stream=True
                     )
@@ -576,10 +470,10 @@ else:
                 except Exception as e:
                     handle_groq_error(e, placeholder)
 
-    # ================= 3. QUIZ MAKER MODULE =================
+    # ================= MODULE 3: HYBRID ADAPTIVE QUIZ MAKER =================
     elif menu == "Quiz Maker":
         st.markdown("<h1>📝 Interactive Quiz Generator</h1>", unsafe_allow_html=True)
-        st.caption("Test your knowledge with rigorous multiple-choice mathematical questions and instant feedback.")
+        st.caption("Test your knowledge with rigorous multiple-choice questions and instant feedback.")
 
         if not st.session_state.pdf_text:
             st.info("💡 Please upload a study material PDF from the sidebar to activate the Quiz Generator.")
@@ -590,14 +484,7 @@ else:
                 st.session_state.user_answers = {}
 
             with st.container():
-                num_questions = st.number_input(
-                    "How many questions would you like to generate?",
-                    min_value=1,
-                    max_value=10,
-                    value=3,
-                    step=1,
-                    key="quiz_num_input"
-                )
+                num_questions = st.number_input("How many questions would you like to generate?", min_value=1, max_value=10, value=3, step=1, key="quiz_num_input")
                 st.markdown("<br>", unsafe_allow_html=True)
                 generate_btn = st.button("Build My Practice Exam", type="primary")
 
@@ -616,16 +503,14 @@ else:
                                     "ADAPTIVE TEXT PROCESSING RULES:\n"
                                     "1. IF the text is conversational, historical, linguistic, or theoretical: Focus on core facts, concepts, definitions, and logical reasoning.\n"
                                     "2. IF the text contains mathematics, physics, or computing formulas: Perform full precise derivations/calculations, and seamlessly present formulas in standard LaTeX using single dollar signs (e.g., $f(x) = \\sum_{n=0}^{\\infty} a_n x^n$).\n\n"
-                                    "CRITICAL OUTPUT FORMAT RULES:\n"
-                                    "- You must output the quiz using the exact plain-text pattern below.\n"
-                                    "- Do NOT include any letters like A), B), C), D) inside the options array or the correct answer text itself. Just provide the raw answer text.\n"
-                                    "- Output nothing else outside the pattern structure.\n\n"
+                                    "CRITICAL OUTPUT FORMAT:\n"
+                                    "You must output the quiz using the exact plain-text pattern below. Do NOT use markdown bold on identifiers. Output nothing else:\n\n"
                                     "QUESTION: [Write the question here, use $ for LaTeX if applicable]\n"
-                                    "A) [Option A text ONLY, do NOT start with A or A)]\n"
-                                    "B) [Option B text ONLY, do NOT start with B or B)]\n"
-                                    "C) [Option C text ONLY, do NOT start with C or C)]\n"
-                                    "D) [Option D text ONLY, do NOT start with D or D)]\n"
-                                    "CORRECT: [Write the exact option string matching the correct option, without any letter prefix]\n"
+                                    "A) [Option A]\n"
+                                    "B) [Option B]\n"
+                                    "C) [Option C]\n"
+                                    "D) [Option D]\n"
+                                    "CORRECT: [Write the exact string matching the correct option]\n"
                                     "---"
                                 )
                             },
@@ -639,35 +524,44 @@ else:
                     
                     raw_text = response.choices[0].message.content
                     
+                    # Robust Data Normalization & String Stripping Filters
+                    def clean_prefix(text):
+                        if not text: return ""
+                        return re.sub(r"^(QUESTION:|CORRECT:|[A-D]\s*[\)|:]?)\s*", "", text.strip()).strip()
+
+                    questions_list = []
                     blocks = raw_text.split("---")
-                    parsed_questions = []
                     q_id = 1
                     
                     for block in blocks:
-                        if "QUESTION:" in block and "CORRECT:" in block:
-                            q_text = re.search(r"QUESTION:\s*(.*?)\n[A-D]\)", block, re.DOTALL)
-                            opt_a = re.search(r"A\)\s*(.*?)\n", block)
-                            opt_b = re.search(r"B\)\s*(.*?)\n", block)
-                            opt_c = re.search(r"C\)\s*(.*?)\n", block)
-                            opt_d = re.search(r"D\)\s*(.*?)\n", block)
-                            correct = re.search(r"CORRECT:\s*(.*?)(?:\n|$)", block)
+                        if "QUESTION:" in block:
+                            lines = [line.strip() for line in block.split("\n") if line.strip()]
+                            question_text = ""
+                            options = []
+                            correct_answer = ""
                             
-                            if q_text and opt_a and opt_b and opt_c and opt_d and correct:
-                                parsed_questions.append({
+                            for line in lines:
+                                if line.startswith("QUESTION:"):
+                                    question_text = clean_prefix(line)
+                                elif line.startswith(("A)", "B)", "C)", "D)")):
+                                    options.append(clean_prefix(line))
+                                elif line.startswith("CORRECT:"):
+                                    correct_answer = clean_prefix(line)
+                            
+                            if question_text and len(options) >= 2 and correct_answer:
+                                questions_list.append({
                                     "id": q_id,
-                                    "question": q_text.group(1).strip(),
-                                    "options": [opt_a.group(1).strip(), opt_b.group(1).strip(), opt_c.group(1).strip(), opt_d.group(1).strip()],
-                                    "answer": correct.group(1).strip()
+                                    "question": question_text,
+                                    "options": options,
+                                    "answer": correct_answer
                                 })
                                 q_id += 1
                     
-                    st.session_state.quiz_data = {"questions": parsed_questions}
+                    st.session_state.quiz_data = {"questions": questions_list}
                     st.session_state.user_answers = {}
                     placeholder.empty()
-                    
-                    if not parsed_questions:
+                    if not questions_list:
                         st.warning("Could not structure the quiz. Please try generating again.")
-                        
                 except Exception as e:
                     handle_groq_error(e, placeholder)
 
@@ -677,21 +571,9 @@ else:
                 total_q = len(st.session_state.quiz_data["questions"])
                 
                 for q in st.session_state.quiz_data["questions"]:
-                    st.markdown(f"""
-                        <div class="premium-card" style="margin-bottom: 5px;">
-                            <span style='color: #60a5fa; font-weight: 800; font-size: 14px;'>EXAM QUESTION {q['id']}</span>
-                        </div>
-                    """, unsafe_allow_html=True)
-                    
+                    st.markdown(f'<div class="premium-card" style="margin-bottom: 5px;"><span style="color: #60a5fa; font-weight: 800; font-size: 14px;">EXAM QUESTION {q["id"]}</span></div>', unsafe_allow_html=True)
                     st.markdown(f"**{q['question']}**")
-                    
-                    user_choice = st.radio(
-                        "Choose your answer:",
-                        options=q["options"],
-                        key=f"q_{q['id']}",
-                        index=None,
-                        label_visibility="collapsed"
-                    )
+                    user_choice = st.radio("Choose answer:", options=q["options"], key=f"q_{q['id']}", index=None, label_visibility="collapsed")
                     st.session_state.user_answers[q["id"]] = user_choice
                     st.markdown("<br>", unsafe_allow_html=True)
 
@@ -699,10 +581,10 @@ else:
                     st.markdown("<h2 style='font-size: 22px;'>📊 Results Summary</h2>", unsafe_allow_html=True)
                     for q in st.session_state.quiz_data["questions"]:
                         ans = st.session_state.user_answers.get(q["id"])
+                        
                         def clean_text(text):
-                            if not text:
-                                return ""
-                            return re.sub(r"^[A-D]\s*[\)|:]?\s*", "", str(text)).strip().lower()
+                            if not text: return ""
+                            return re.sub(r"^[A-D]\s*[\)|:]\s*", "", str(text)).strip().lower()
 
                         if clean_text(ans) == clean_text(q["answer"]):
                             st.success(f"✅ **Question {q['id']}: Correct!**")
@@ -711,11 +593,10 @@ else:
                         else:
                             st.error(f"❌ **Question {q['id']}: Incorrect.**")
                             st.markdown(f"*Your answer:* {ans}\n\n*Correct answer:* {q['answer']}")
-                    
                     st.markdown("<br>", unsafe_allow_html=True)
                     st.metric(label="Final Score Summary", value=f"{score} / {total_q}", delta=f"{int((score/total_q)*100)}% Success Rate")
 
-    # ================= 4. STUDY PLANNER MODULE =================
+    # ================= MODULE 4: STUDY PLANNER =================
     elif menu == "Study Planner":
         st.markdown("<h1>📅 AI Curriculum & Study Planner</h1>", unsafe_allow_html=True)
         st.caption("Break down dense exam materials into clean, step-by-step daily milestones.")
@@ -728,8 +609,7 @@ else:
                 st.markdown("<br>", unsafe_allow_html=True)
                 btn = st.button("Build My Learning Schedule", type="primary")
 
-            if btn:
-                st.session_state.active_feature = "planner"
+            if btn: st.session_state.active_feature = "planner"
 
             if st.session_state.active_feature == "planner":
                 st.markdown("---")
@@ -745,15 +625,12 @@ else:
                         ],
                         stream=True
                     )
-
                     for chunk in stream:
                         content = chunk.choices[0].delta.content
                         if content:
                             output += content
                             placeholder.markdown(output + " ... ▌")
-
                     placeholder.markdown(output)
-
                 except Exception as e:
                     handle_groq_error(e, placeholder)
                     st.session_state.active_feature = None
