@@ -376,7 +376,7 @@ else:
     # --- CHAT HISTORY SECTIONS MANAGER BLOCK (RENDERED ONLY WHEN MENU MATCHES CHAT) ---
     if menu == "Chat":
         st.sidebar.markdown("<br>", unsafe_allow_html=True)
-        if st.sidebar.button("➕ New Chat / Yeni Sohbet", type="primary", use_container_width=True):
+        if st.sidebar.button("➕ New Chat ", type="primary", use_container_width=True):
             st.session_state.current_session_id = create_new_session(st.session_state.user)
             st.rerun()
             
@@ -415,7 +415,7 @@ else:
             st.sidebar.error(f"File Error: {e}")
 
     # Expandable Advanced Settings
-    with st.sidebar.expander("⚙️ Advanced Tuning"):
+    with st.sidebar.expander("⚙️ Advanced Settings"):
         temperature = st.slider("Creativity (Temperature)", 0.0, 1.5, 0.3)
         use_pdf = st.toggle("Include PDF document in Chat", value=True)
 
@@ -423,7 +423,7 @@ else:
     st.sidebar.markdown("<br><hr>", unsafe_allow_html=True)
 
     if menu == "Chat":
-        if st.sidebar.button("🗑️ Delete Current Chat Thread", type="secondary"):
+        if st.sidebar.button("🗑️ Delete Current Chat ", type="secondary"):
             delete_session(st.session_state.current_session_id)
             st.session_state.current_session_id = None
             st.sidebar.info("Conversation thread purged.")
