@@ -634,11 +634,6 @@ else:
                                 "content": f"Generate exactly {num_questions} high-quality quiz questions following the system pattern based on this material:\n\n{st.session_state.pdf_text}"
                             }
                         ],
-                            {
-                                "role": "user", 
-                                "content": f"Generate exactly {num_questions} high-quality quiz questions following the system pattern based on this material:\n\n{st.session_state.pdf_text}"
-                            }
-                        ],
                         temperature=0.3
                     )
                     
